@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src\PageSpeedMcp\PageSpeedMcp.csproj" />
+  <Project Path="tests\PageSpeedMcp.Tests\PageSpeedMcp.Tests.csproj" />
+</Solution>
