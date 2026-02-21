@@ -74,7 +74,7 @@ jobs:
             runner: ubuntu-24.04-arm
             artifact: psi-mcp-csharp-linux-arm64
           - rid: osx-x64
-            runner: macos-13
+            runner: macos-latest
             artifact: psi-mcp-csharp-osx-x64
           - rid: osx-arm64
             runner: macos-latest
