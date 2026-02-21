@@ -11,7 +11,7 @@ import (
 // TestNewServer_RegistersTools verifies that the MCP server can be created and all
 // tools can be registered without panicking. This catches invalid struct tags or
 // schema-generation failures at test time rather than at runtime.
-func TestNewServer_RegistersTools(t *testing.T) {
+func TestNewServer_RegistersTools(_ *testing.T) {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "google-psi-mcp",
 		Version: "test",

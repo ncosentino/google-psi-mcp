@@ -91,10 +91,6 @@ func analyzePages(ctx context.Context, client *pagespeed.Client, urls []string, 
 	}
 
 	strategies := resolveStrategies(strategy)
-	type urlStrategy struct {
-		url      string
-		strategy string
-	}
 
 	type entry struct {
 		URL      string            `json:"url"`
@@ -108,11 +104,11 @@ func analyzePages(ctx context.Context, client *pagespeed.Client, urls []string, 
 		var results []*pagespeed.Result
 		var errMsg string
 
-		for _, strat := range strategies {
-			r, err := client.Analyze(ctx, u, strat)
+		for _, s := range strategies {
+			r, err := client.Analyze(ctx, u, s)
 			if err != nil {
-				errMsg = fmt.Sprintf("error analyzing %s (%s): %v", u, strat, err)
-				slog.Warn("PSI analysis failed", "url", u, "strategy", strat, "err", err)
+				errMsg = fmt.Sprintf("error analyzing %s (%s): %v", u, s, err)
+				slog.Warn("PSI analysis failed", "url", u, "strategy", s, "err", err)
 				break
 			}
 			results = append(results, r)
