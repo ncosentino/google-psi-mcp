@@ -74,14 +74,14 @@ func main() {
 
 // analyzePageInput is the input schema for the analyze_page tool.
 type analyzePageInput struct {
-	URL      string `json:"url"      jsonschema:"required,description=The URL to analyze"`
-	Strategy string `json:"strategy" jsonschema:"enum=mobile,enum=desktop,enum=both,default=both,description=Analysis strategy: mobile, desktop, or both"`
+	URL      string `json:"url"`
+	Strategy string `json:"strategy"`
 }
 
 // analyzePagesInput is the input schema for the analyze_pages tool.
 type analyzePagesInput struct {
-	URLs     []string `json:"urls"     jsonschema:"required,description=Array of URLs to analyze"`
-	Strategy string   `json:"strategy" jsonschema:"enum=mobile,enum=desktop,enum=both,default=both,description=Analysis strategy: mobile, desktop, or both"`
+	URLs     []string `json:"urls"`
+	Strategy string   `json:"strategy"`
 }
 
 // analyzePages runs PSI analysis for the given URLs and strategy, returning a JSON tool result.
