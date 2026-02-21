@@ -7,11 +7,12 @@ internal sealed record PageSpeedResult(
     string Url,
     string Strategy,
     DateTimeOffset AnalyzedAt,
-    CategoryScores Scores,
-    CoreWebVitals CoreWebVitals,
-    IReadOnlyList<Opportunity> Opportunities,
-    IReadOnlyList<AuditResult> FailingAudits,
-    IReadOnlyList<string> PassedAuditIds);
+    CategoryScores? Scores,
+    CoreWebVitals? CoreWebVitals,
+    IReadOnlyList<Opportunity>? Opportunities,
+    IReadOnlyList<AuditResult>? FailingAudits,
+    IReadOnlyList<string>? PassedAuditIds,
+    string? Error = null);
 
 /// <summary>Category scores in the range 0-100.</summary>
 internal sealed record CategoryScores(int Performance, int Seo, int Accessibility, int BestPractices);

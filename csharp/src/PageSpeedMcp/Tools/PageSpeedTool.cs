@@ -40,17 +40,10 @@ internal sealed class PageSpeedTool(PageSpeedClient client)
             ? ["mobile", "desktop"]
             : [strategy.ToLowerInvariant()];
 
-        var results = new List<PageSpeedResult>(urls.Length * strategies.Length);
+        var tasks = urls
+            .SelectMany(u => strategies.Select(s => client.AnalyzeAsync(u, s, cancellationToken)))
+            .ToArray();
 
-        foreach (var u in urls)
-        {
-            foreach (var strat in strategies)
-            {
-                var result = await client.AnalyzeAsync(u, strat, cancellationToken).ConfigureAwait(false);
-                results.Add(result);
-            }
-        }
-
-        return [.. results];
+        return await Task.WhenAll(tasks).ConfigureAwait(false);
     }
 }
