@@ -56,7 +56,6 @@ func TestResolveFlagTakesPriority(t *testing.T) {
 }
 
 func TestResolveEmpty(t *testing.T) {
-	t.Parallel()
 	t.Setenv("GOOGLE_PSI_API_KEY", "")
 	cfg := config.Resolve("")
 	if cfg.APIKey != "" {
