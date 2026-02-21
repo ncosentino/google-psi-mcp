@@ -33,6 +33,7 @@ jobs:
         with:
           version: latest
           working-directory: go
+          install-mode: goinstall
 
       - name: go test
         run: go test ./...
