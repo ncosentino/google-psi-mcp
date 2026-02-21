@@ -21,7 +21,7 @@ import (
 	"github.com/ncosentino/google-psi-mcp/go/internal/pagespeed"
 )
 
-const version = "1.0.0"
+var version = "dev"
 
 func main() {
 	apiKeyFlag := flag.String("api-key", "", "Google PageSpeed Insights API key")
