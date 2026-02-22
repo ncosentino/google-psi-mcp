@@ -371,6 +371,13 @@ dotnet test PageSpeedMcp.slnx
 
 ---
 
+## Related Projects
+
+- [google-search-console-mcp](https://github.com/ncosentino/google-search-console-mcp) -- Google Search Console MCP server: query clicks, impressions, CTR, and ranking position from your Search Console properties
+- [google-keyword-planner-mcp](https://github.com/ncosentino/google-keyword-planner-mcp) -- Google Ads Keyword Planner MCP server: keyword ideas, search volume, competition, and CPC data
+
+---
+
 ## About
 
 ### Nick Cosentino -- Dev Leader
