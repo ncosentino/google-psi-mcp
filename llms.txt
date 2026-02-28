@@ -1,0 +1,23 @@
+# Google PageSpeed Insights MCP
+
+> Zero-dependency MCP server that exposes Google PageSpeed Insights to AI assistants.
+
+The Google PageSpeed Insights MCP server provides native binaries for Go and C#.
+It exposes two MCP tools -- analyze_page and analyze_pages --
+directly to AI assistants like Claude, GitHub Copilot, and Cursor.
+Author: Nick Cosentino (https://www.devleader.ca).
+
+- [Home](https://github.devleader.ca/google-psi-mcp/) -- MCP server that exposes Google PageSpeed Insights Core Web Vitals analysis to AI assistants. Analyze LCP, CLS, FCP, TTFB, and more with Claude, GitHub Copilot, and Cursor.
+- [Getting Started](https://github.devleader.ca/google-psi-mcp/getting-started/) -- Get started with the Google PageSpeed Insights MCP server. Get an API key, download a native binary, and configure your AI tool in three steps.
+
+## MCP Tools
+
+- [Overview](https://github.devleader.ca/google-psi-mcp/tools/) -- Two MCP tools for Google PageSpeed Insights analysis. analyze_page for single URLs, analyze_pages for batch analysis. Includes Core Web Vitals thresholds and strategy guidance.
+- [analyze_page](https://github.devleader.ca/google-psi-mcp/tools/analyze-page/) -- MCP tool to analyze a single URL with Google PageSpeed Insights. Parameters, full response schema (Core Web Vitals, category scores, opportunities, failing audits), and example prompts.
+- [analyze_pages](https://github.devleader.ca/google-psi-mcp/tools/analyze-pages/) -- MCP tool to analyze multiple URLs with Google PageSpeed Insights in one call. Includes timeout risk table, batch size recommendations, and example prompts.
+- [Setup by Tool](https://github.devleader.ca/google-psi-mcp/setup-by-tool/) -- Configure the Google PageSpeed Insights MCP server in GitHub Copilot CLI, Claude Desktop, Cursor, VS Code, Visual Studio, or via a .env file.
+- [Configuration](https://github.devleader.ca/google-psi-mcp/configuration/) -- Configure the GOOGLE_PSI_API_KEY for the PageSpeed Insights MCP server via environment variable, CLI argument, or .env file. Includes resolution order and quota notes.
+- [Troubleshooting](https://github.devleader.ca/google-psi-mcp/troubleshooting/) -- Fix timeouts and API key errors with the Google PageSpeed Insights MCP server. Includes per-scenario timeout risk table and mitigation strategies.
+- [Go vs C#](https://github.devleader.ca/google-psi-mcp/implementations/) -- Compare the Go and C# implementations of the Google PageSpeed Insights MCP server. Both expose identical tools -- choose based on binary size and ecosystem preference.
+- [Building from Source](https://github.devleader.ca/google-psi-mcp/building/) -- Build the Google PageSpeed Insights MCP server from source. Covers Go build with ldflags and trimpath, cross-compilation, and C# Native AOT dotnet publish with RID reference.
+- [Articles](https://github.devleader.ca/google-psi-mcp/articles/) -- Zero-dependency MCP server exposing Google PageSpeed Insights Core Web Vitals to AI assistants. Pre-built native binaries for Linux, macOS, and Windows -- no Node.js, no Python, no runtime required.
