@@ -24,7 +24,9 @@ publish/
 # Environment
 .env
 
-# Editor
+# MkDocs
+site/
+__pycache__/
 .vscode/
 *.swp
 *.swo
