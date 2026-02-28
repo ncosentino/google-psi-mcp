@@ -1,3 +1,7 @@
+---
+description: Build the Google PageSpeed Insights MCP server from source. Covers Go build with ldflags and trimpath, cross-compilation, and C# Native AOT dotnet publish with RID reference.
+---
+
 # Building from Source
 
 Build the Go or C# implementation locally from source.

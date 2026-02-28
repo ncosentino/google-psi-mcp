@@ -1,3 +1,7 @@
+---
+description: Configure the Google PageSpeed Insights MCP server in GitHub Copilot CLI, Claude Desktop, Cursor, VS Code, Visual Studio, or via a .env file.
+---
+
 # Setup by Tool
 
 Configuration snippets for each AI tool that supports MCP. Replace the path to the binary and provide your API key via environment variable or `.env` file.

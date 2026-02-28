@@ -1,4 +1,8 @@
-# Articles & Blog Posts
+---
+description: Blog posts and articles about the Google PageSpeed Insights MCP server from Dev Leader. Covers Core Web Vitals, Lighthouse analysis, and AI-assisted performance optimization.
+---
+
+
 
 Blog posts and articles about this MCP server from [Dev Leader](https://www.devleader.ca).
 

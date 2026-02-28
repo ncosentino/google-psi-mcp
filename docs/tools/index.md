@@ -1,3 +1,7 @@
+---
+description: Two MCP tools for Google PageSpeed Insights analysis. analyze_page for single URLs, analyze_pages for batch analysis. Includes Core Web Vitals thresholds and strategy guidance.
+---
+
 # MCP Tools
 
 The server exposes two tools to your AI assistant.

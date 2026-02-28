@@ -1,3 +1,7 @@
+---
+description: MCP tool to analyze multiple URLs with Google PageSpeed Insights in one call. Includes timeout risk table, batch size recommendations, and example prompts.
+---
+
 # analyze_pages
 
 Analyze multiple URLs in a single tool call.

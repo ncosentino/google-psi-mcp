@@ -1,3 +1,7 @@
+---
+description: Compare the Go and C# implementations of the Google PageSpeed Insights MCP server. Both expose identical tools -- choose based on binary size and ecosystem preference.
+---
+
 # Go vs C#
 
 Both implementations expose identical MCP tools with identical behavior. Choose based on your environment.

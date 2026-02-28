@@ -1,3 +1,7 @@
+---
+description: MCP server that exposes Google PageSpeed Insights Core Web Vitals analysis to AI assistants. Analyze LCP, CLS, FCP, TTFB, and more with Claude, GitHub Copilot, and Cursor.
+---
+
 # Google PageSpeed Insights MCP
 
 > **Zero-dependency MCP server for Google PageSpeed Insights Core Web Vitals.**

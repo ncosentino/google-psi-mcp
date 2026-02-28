@@ -1,3 +1,7 @@
+---
+description: Fix timeouts and API key errors with the Google PageSpeed Insights MCP server. Includes per-scenario timeout risk table and mitigation strategies.
+---
+
 # Troubleshooting
 
 ## Timeouts

@@ -1,3 +1,7 @@
+---
+description: Configure the GOOGLE_PSI_API_KEY for the PageSpeed Insights MCP server via environment variable, CLI argument, or .env file. Includes resolution order and quota notes.
+---
+
 # Configuration
 
 The server needs a single credential: a Google PageSpeed Insights API key. It can be provided in three ways.

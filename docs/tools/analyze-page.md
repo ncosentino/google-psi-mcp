@@ -1,3 +1,7 @@
+---
+description: MCP tool to analyze a single URL with Google PageSpeed Insights. Parameters, full response schema (Core Web Vitals, category scores, opportunities, failing audits), and example prompts.
+---
+
 # analyze_page
 
 Analyze a single URL with the Google PageSpeed Insights API.

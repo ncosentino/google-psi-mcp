@@ -1,3 +1,7 @@
+---
+description: Get started with the Google PageSpeed Insights MCP server. Get an API key, download a native binary, and configure your AI tool in three steps.
+---
+
 # Getting Started
 
 Get up and running in three steps: get an API key, download a binary, and configure your AI tool.
