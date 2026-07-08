@@ -26,6 +26,7 @@ publish/
 
 # MkDocs
 site/
+.wrangler/
 __pycache__/
 .vscode/
 *.swp
