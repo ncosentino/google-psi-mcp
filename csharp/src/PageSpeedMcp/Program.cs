@@ -1,55 +1,52 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using System.Globalization;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
+using PageSpeedMcp;
 using PageSpeedMcp.Config;
-using PageSpeedMcp.Crux;
-using PageSpeedMcp.PageSpeed;
 using PageSpeedMcp.Tools;
 
 var apiKey = ApiKeyResolver.Resolve(
-    args.SkipWhile(a => a != "--api-key").Skip(1).FirstOrDefault());
+    args.SkipWhile(argument => argument != "--api-key").Skip(1).FirstOrDefault());
 
 if (string.IsNullOrWhiteSpace(apiKey))
 {
     await Console.Error.WriteLineAsync(
-        "ERROR: No API key provided. Use --api-key <key>, set GOOGLE_PSI_API_KEY env var, or add it to a .env file.")
+        "ERROR: No API key provided. Use --api-key <key>, set GOOGLE_PSI_API_KEY, or add it to a .env file.")
+        .ConfigureAwait(false);
+    return 1;
+}
+
+var transport = args
+    .SkipWhile(argument => argument != "--transport")
+    .Skip(1)
+    .FirstOrDefault() ?? "stdio";
+
+if (transport == "http")
+{
+    var portValue = Environment.GetEnvironmentVariable("PORT") is { Length: > 0 } configuredPort
+        ? configuredPort
+        : "8080";
+    var app = Hosting.BuildHttpHost(
+        args,
+        apiKey,
+        int.Parse(portValue, CultureInfo.InvariantCulture));
+    await app.RunAsync().ConfigureAwait(false);
+    return 0;
+}
+if (transport != "stdio")
+{
+    await Console.Error.WriteLineAsync(
+        $"ERROR: Invalid transport \"{transport}\". Expected stdio or http.")
         .ConfigureAwait(false);
     return 1;
 }
 
 var builder = Host.CreateApplicationBuilder(args);
-
-// All logs must go to stderr to avoid corrupting the MCP STDIO stream.
-builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
-builder.Logging.SetMinimumLevel(LogLevel.Warning);
-
-builder.Services
-    .AddHttpClient(nameof(PageSpeedClient), http =>
-    {
-        http.Timeout = TimeSpan.FromSeconds(120);
-    });
-
-builder.Services
-    .AddHttpClient(nameof(CruxClient), http =>
-    {
-        http.Timeout = TimeSpan.FromSeconds(30);
-    });
-
-builder.Services.AddTransient<PageSpeedClient>(sp =>
-{
-    var factory = sp.GetRequiredService<IHttpClientFactory>();
-    return new PageSpeedClient(factory.CreateClient(nameof(PageSpeedClient)), apiKey!);
-});
-
-builder.Services.AddTransient<CruxClient>(sp =>
-{
-    var factory = sp.GetRequiredService<IHttpClientFactory>();
-    return new CruxClient(factory.CreateClient(nameof(CruxClient)), apiKey!);
-});
-
+Hosting.ConfigureCommonServices(builder, apiKey);
 builder.Services
     .AddMcpServer()
+    .WithStringifiedArgsCoercion()
     .WithStdioServerTransport()
     .WithTools<PageSpeedTool>()
     .WithTools<CruxTool>();

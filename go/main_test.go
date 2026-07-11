@@ -22,6 +22,30 @@ type trackingAnalyzer struct {
 	calls     atomic.Int32
 }
 
+type fakeCruxQuerier struct{}
+
+func (fakeCruxQuerier) QueryCurrent(
+	_ context.Context,
+	request crux.QueryRequest,
+) (*crux.Result, error) {
+	return &crux.Result{
+		Target:     request.Target,
+		TargetType: request.TargetType,
+		Metrics:    map[string]crux.Metric{},
+	}, nil
+}
+
+func (fakeCruxQuerier) QueryHistory(
+	_ context.Context,
+	request crux.QueryRequest,
+) (*crux.HistoryResult, error) {
+	return &crux.HistoryResult{
+		Target:     request.Target,
+		TargetType: request.TargetType,
+		Metrics:    map[string]crux.HistoryMetric{},
+	}, nil
+}
+
 func (a *trackingAnalyzer) Analyze(
 	_ context.Context,
 	request pagespeed.AnalysisRequest,

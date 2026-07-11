@@ -1,9 +1,10 @@
 // Command google-psi-mcp is an MCP server that exposes Google PageSpeed Insights
-// as tools for AI assistants. It communicates via STDIO using the MCP protocol.
+// as tools for AI assistants. It supports STDIO and Streamable HTTP transports.
 //
 // Usage:
 //
-//	google-psi-mcp [--api-key <key>]
+//	google-psi-mcp [--api-key <key>] [--transport stdio|http]
+//	    [--allowed-hosts <list>]
 //
 // API key resolution order: --api-key flag, GOOGLE_PSI_API_KEY env var, .env file.
 package main
@@ -17,6 +18,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -56,7 +58,13 @@ type analysisResponse struct {
 }
 
 func main() {
-	apiKeyFlag := flag.String("api-key", "", "Google PageSpeed Insights API key")
+	apiKeyFlag := flag.String("api-key", "", "Google API key for PageSpeed Insights and CrUX")
+	transport := flag.String("transport", "stdio", "Transport mode: stdio or http")
+	allowedHosts := flag.String(
+		"allowed-hosts",
+		"localhost,127.0.0.1,[::1]",
+		"Comma-separated Host header allow-list for HTTP transport",
+	)
 	flag.Parse()
 
 	// All diagnostic output must go to stderr to avoid corrupting the MCP STDIO stream.
@@ -75,9 +83,17 @@ func main() {
 
 	srv := newServer(client, cruxClient)
 
-	slog.Info("google-psi-mcp starting", "version", version, "transport", "stdio")
-	if err := srv.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		slog.Error("server stopped with error", "err", err)
+	switch *transport {
+	case "stdio":
+		slog.Info("google-psi-mcp starting", "version", version, "transport", "stdio")
+		if err := srv.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+			slog.Error("server stopped with error", "err", err)
+			os.Exit(1)
+		}
+	case "http":
+		runHTTP(srv, splitAndTrim(*allowedHosts))
+	default:
+		slog.Error("invalid transport", "transport", *transport, "expected", "stdio or http")
 		os.Exit(1)
 	}
 }
@@ -88,6 +104,7 @@ func newServer(client pageAnalyzer, cruxClient cruxQuerier) *mcp.Server {
 		Name:    "google-psi-mcp",
 		Version: version,
 	}, nil)
+	srv.AddReceivingMiddleware(coerceStringifiedArrayArgs(toolArrayFields))
 
 	mcp.AddTool(srv,
 		&mcp.Tool{
@@ -328,9 +345,21 @@ func jsonToolResult(value any) (*mcp.CallToolResult, any, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("marshalling tool result: %w", err)
 	}
+
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: string(encoded)},
 		},
 	}, nil, nil
+}
+
+func splitAndTrim(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			result = append(result, part)
+		}
+	}
+	return result
 }
