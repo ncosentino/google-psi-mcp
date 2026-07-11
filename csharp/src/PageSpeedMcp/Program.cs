@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using PageSpeedMcp.Config;
+using PageSpeedMcp.Crux;
 using PageSpeedMcp.PageSpeed;
 using PageSpeedMcp.Tools;
 
@@ -29,16 +30,29 @@ builder.Services
         http.Timeout = TimeSpan.FromSeconds(120);
     });
 
+builder.Services
+    .AddHttpClient(nameof(CruxClient), http =>
+    {
+        http.Timeout = TimeSpan.FromSeconds(30);
+    });
+
 builder.Services.AddTransient<PageSpeedClient>(sp =>
 {
     var factory = sp.GetRequiredService<IHttpClientFactory>();
     return new PageSpeedClient(factory.CreateClient(nameof(PageSpeedClient)), apiKey!);
 });
 
+builder.Services.AddTransient<CruxClient>(sp =>
+{
+    var factory = sp.GetRequiredService<IHttpClientFactory>();
+    return new CruxClient(factory.CreateClient(nameof(CruxClient)), apiKey!);
+});
+
 builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
-    .WithTools<PageSpeedTool>();
+    .WithTools<PageSpeedTool>()
+    .WithTools<CruxTool>();
 
 var host = builder.Build();
 await host.RunAsync().ConfigureAwait(false);

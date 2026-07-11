@@ -18,6 +18,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/ncosentino/google-psi-mcp/go/internal/config"
+	"github.com/ncosentino/google-psi-mcp/go/internal/crux"
 	"github.com/ncosentino/google-psi-mcp/go/internal/pagespeed"
 )
 
@@ -39,7 +40,19 @@ func main() {
 	}
 
 	client := pagespeed.NewClient(cfg.APIKey)
+	cruxClient := crux.NewClient(cfg.APIKey)
 
+	srv := newServer(client, cruxClient)
+
+	slog.Info("google-psi-mcp starting", "version", version, "transport", "stdio")
+	if err := srv.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+		slog.Error("server stopped with error", "err", err)
+		os.Exit(1)
+	}
+}
+
+// newServer builds the MCP server independently of its transport.
+func newServer(client *pagespeed.Client, cruxClient *crux.Client) *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "google-psi-mcp",
 		Version: version,
@@ -57,6 +70,54 @@ func main() {
 
 	mcp.AddTool(srv,
 		&mcp.Tool{
+			Name:        "get_crux_data",
+			Description: "Get current Chrome UX Report real-user data for a URL or origin. Supports all current CrUX metrics, including Core Web Vitals, LCP subparts, navigation types, RTT, resource types, and form-factor fractions. Requires the Chrome UX Report API to be enabled and allowed for the configured API key.",
+		},
+		func(ctx context.Context, _ *mcp.CallToolRequest, input cruxDataInput) (*mcp.CallToolResult, any, error) {
+			request, err := crux.NewQueryRequest(
+				input.Target,
+				input.TargetType,
+				input.FormFactor,
+				input.Metrics,
+				0,
+			)
+			if err != nil {
+				return nil, nil, err
+			}
+			result, err := cruxClient.QueryCurrent(ctx, request)
+			if err != nil {
+				return nil, nil, err
+			}
+			return jsonToolResult(result)
+		},
+	)
+
+	mcp.AddTool(srv,
+		&mcp.Tool{
+			Name:        "get_crux_history",
+			Description: "Get up to 40 weekly Chrome UX Report collection periods for a URL or origin. Returns real-user metric timeseries with null values for unavailable periods. Requires the Chrome UX Report API to be enabled and allowed for the configured API key.",
+		},
+		func(ctx context.Context, _ *mcp.CallToolRequest, input cruxHistoryInput) (*mcp.CallToolResult, any, error) {
+			request, err := crux.NewQueryRequest(
+				input.Target,
+				input.TargetType,
+				input.FormFactor,
+				input.Metrics,
+				input.CollectionPeriodCount,
+			)
+			if err != nil {
+				return nil, nil, err
+			}
+			result, err := cruxClient.QueryHistory(ctx, request)
+			if err != nil {
+				return nil, nil, err
+			}
+			return jsonToolResult(result)
+		},
+	)
+
+	mcp.AddTool(srv,
+		&mcp.Tool{
 			Name:        "analyze_pages",
 			Description: "Analyze multiple URLs using Google PageSpeed Insights. Returns separate real-user field data and Lighthouse lab data for every URL and strategy. strategy defaults to both. categories defaults to performance, SEO, accessibility, and best-practices; agentic-browsing is experimental and must be requested explicitly.",
 		},
@@ -65,11 +126,7 @@ func main() {
 		},
 	)
 
-	slog.Info("google-psi-mcp starting", "version", version, "transport", "stdio")
-	if err := srv.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		slog.Error("server stopped with error", "err", err)
-		os.Exit(1)
-	}
+	return srv
 }
 
 // analyzePageInput is the input schema for the analyze_page tool.
@@ -86,6 +143,23 @@ type analyzePagesInput struct {
 	Strategy   string   `json:"strategy,omitempty"`
 	Categories []string `json:"categories,omitempty"`
 	Locale     string   `json:"locale,omitempty"`
+}
+
+// cruxDataInput is the input schema for current Chrome UX Report data.
+type cruxDataInput struct {
+	Target     string   `json:"target"`
+	TargetType string   `json:"target_type,omitempty"`
+	FormFactor string   `json:"form_factor,omitempty"`
+	Metrics    []string `json:"metrics,omitempty"`
+}
+
+// cruxHistoryInput is the input schema for historical Chrome UX Report data.
+type cruxHistoryInput struct {
+	Target                string   `json:"target"`
+	TargetType            string   `json:"target_type,omitempty"`
+	FormFactor            string   `json:"form_factor,omitempty"`
+	Metrics               []string `json:"metrics,omitempty"`
+	CollectionPeriodCount int      `json:"collection_period_count,omitempty"`
 }
 
 // analyzePages runs PSI analysis for the given URLs and strategy, returning a JSON tool result.
@@ -135,14 +209,17 @@ func analyzePages(
 		}
 	}
 
-	b, err := json.Marshal(response)
-	if err != nil {
-		return nil, nil, fmt.Errorf("marshalling results: %w", err)
-	}
+	return jsonToolResult(response)
+}
 
+func jsonToolResult(value any) (*mcp.CallToolResult, any, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshalling tool result: %w", err)
+	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(b)},
+			&mcp.TextContent{Text: string(encoded)},
 		},
 	}, nil, nil
 }
