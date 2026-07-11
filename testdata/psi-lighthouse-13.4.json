@@ -1,0 +1,263 @@
+{
+  "id": "https://example.test/final",
+  "analysisUTCTimestamp": "2026-07-11T22:59:28Z",
+  "loadingExperience": {
+    "id": "https://example.test/page",
+    "initial_url": "https://example.test/page",
+    "overall_category": "AVERAGE",
+    "origin_fallback": false,
+    "metrics": {
+      "CUMULATIVE_LAYOUT_SHIFT_SCORE": {
+        "percentile": 8,
+        "distributions": [
+          { "min": 0, "max": 10, "proportion": 0.88 },
+          { "min": 10, "max": 25, "proportion": 0.09 },
+          { "min": 25, "proportion": 0.03 }
+        ],
+        "category": "FAST"
+      },
+      "EXPERIMENTAL_TIME_TO_FIRST_BYTE": {
+        "percentile": 920,
+        "distributions": [
+          { "min": 0, "max": 800, "proportion": 0.65 },
+          { "min": 800, "max": 1800, "proportion": 0.25 },
+          { "min": 1800, "proportion": 0.10 }
+        ],
+        "category": "AVERAGE"
+      },
+      "FIRST_CONTENTFUL_PAINT_MS": {
+        "percentile": 2100,
+        "distributions": [
+          { "min": 0, "max": 1800, "proportion": 0.60 },
+          { "min": 1800, "max": 3000, "proportion": 0.28 },
+          { "min": 3000, "proportion": 0.12 }
+        ],
+        "category": "AVERAGE"
+      },
+      "INTERACTION_TO_NEXT_PAINT": {
+        "percentile": 240,
+        "distributions": [
+          { "min": 0, "max": 200, "proportion": 0.70 },
+          { "min": 200, "max": 500, "proportion": 0.22 },
+          { "min": 500, "proportion": 0.08 }
+        ],
+        "category": "AVERAGE"
+      },
+      "LARGEST_CONTENTFUL_PAINT_MS": {
+        "percentile": 3100,
+        "distributions": [
+          { "min": 0, "max": 2500, "proportion": 0.58 },
+          { "min": 2500, "max": 4000, "proportion": 0.30 },
+          { "min": 4000, "proportion": 0.12 }
+        ],
+        "category": "AVERAGE"
+      }
+    }
+  },
+  "originLoadingExperience": {
+    "id": "https://example.test",
+    "initial_url": "https://example.test/page",
+    "overall_category": "FAST",
+    "origin_fallback": false,
+    "metrics": {
+      "CUMULATIVE_LAYOUT_SHIFT_SCORE": {
+        "percentile": 4,
+        "distributions": [
+          { "min": 0, "max": 10, "proportion": 0.94 },
+          { "min": 10, "max": 25, "proportion": 0.04 },
+          { "min": 25, "proportion": 0.02 }
+        ],
+        "category": "FAST"
+      },
+      "INTERACTION_TO_NEXT_PAINT": {
+        "percentile": 170,
+        "distributions": [
+          { "min": 0, "max": 200, "proportion": 0.82 },
+          { "min": 200, "max": 500, "proportion": 0.14 },
+          { "min": 500, "proportion": 0.04 }
+        ],
+        "category": "FAST"
+      },
+      "LARGEST_CONTENTFUL_PAINT_MS": {
+        "percentile": 2200,
+        "distributions": [
+          { "min": 0, "max": 2500, "proportion": 0.78 },
+          { "min": 2500, "max": 4000, "proportion": 0.16 },
+          { "min": 4000, "proportion": 0.06 }
+        ],
+        "category": "FAST"
+      }
+    }
+  },
+  "lighthouseResult": {
+    "requestedUrl": "https://example.test/start",
+    "finalUrl": "https://example.test/final",
+    "finalDisplayedUrl": "https://example.test/final",
+    "mainDocumentUrl": "https://example.test/final",
+    "lighthouseVersion": "13.4.0",
+    "fetchTime": "2026-07-11T22:59:20Z",
+    "runWarnings": [
+      "The page loaded more slowly than expected."
+    ],
+    "runtimeError": null,
+    "categories": {
+      "performance": {
+        "id": "performance",
+        "title": "Performance",
+        "description": "Performance category",
+        "score": 0.82,
+        "categoryScoreDisplayMode": "GAUGE",
+        "auditRefs": [
+          { "id": "first-contentful-paint", "weight": 0.1, "group": "metrics", "acronym": "FCP" },
+          { "id": "largest-contentful-paint", "weight": 0.25, "group": "metrics", "acronym": "LCP" },
+          { "id": "render-blocking-insight", "weight": 0, "group": "insights", "relevantAudits": ["first-contentful-paint", "largest-contentful-paint"] },
+          { "id": "uses-text-compression", "weight": 0, "group": "diagnostics" },
+          { "id": "manual-audit", "weight": 0, "group": "diagnostics" }
+        ]
+      },
+      "agentic-browsing": {
+        "id": "agentic-browsing",
+        "title": "Agentic Browsing",
+        "description": "Agentic browsing category",
+        "score": 0.67,
+        "categoryScoreDisplayMode": "FRACTION",
+        "auditRefs": [
+          { "id": "webmcp-schema-validity", "weight": 1, "group": "agentic" },
+          { "id": "llms-txt", "weight": 1, "group": "agentic" }
+        ]
+      }
+    },
+    "audits": {
+      "first-contentful-paint": {
+        "id": "first-contentful-paint",
+        "title": "First Contentful Paint",
+        "description": "First Contentful Paint metric",
+        "score": 0.88,
+        "scoreDisplayMode": "numeric",
+        "displayValue": "2.1 s",
+        "numericValue": 2100,
+        "numericUnit": "millisecond"
+      },
+      "largest-contentful-paint": {
+        "id": "largest-contentful-paint",
+        "title": "Largest Contentful Paint",
+        "description": "Largest Contentful Paint metric",
+        "score": 0.55,
+        "scoreDisplayMode": "numeric",
+        "displayValue": "3.1 s",
+        "numericValue": 3100,
+        "numericUnit": "millisecond"
+      },
+      "cumulative-layout-shift": {
+        "id": "cumulative-layout-shift",
+        "title": "Cumulative Layout Shift",
+        "description": "Cumulative Layout Shift metric",
+        "score": 0.96,
+        "scoreDisplayMode": "numeric",
+        "displayValue": "0.08",
+        "numericValue": 0.08,
+        "numericUnit": "unitless"
+      },
+      "total-blocking-time": {
+        "id": "total-blocking-time",
+        "title": "Total Blocking Time",
+        "description": "Total Blocking Time metric",
+        "score": 0.90,
+        "scoreDisplayMode": "numeric",
+        "displayValue": "180 ms",
+        "numericValue": 180,
+        "numericUnit": "millisecond"
+      },
+      "server-response-time": {
+        "id": "server-response-time",
+        "title": "Initial server response time was short",
+        "description": "Server response time diagnostic",
+        "score": 1,
+        "scoreDisplayMode": "binary",
+        "displayValue": "Root document took 420 ms",
+        "numericValue": 420,
+        "numericUnit": "millisecond"
+      },
+      "speed-index": {
+        "id": "speed-index",
+        "title": "Speed Index",
+        "description": "Speed Index metric",
+        "score": 0.81,
+        "scoreDisplayMode": "numeric",
+        "displayValue": "3.4 s",
+        "numericValue": 3400,
+        "numericUnit": "millisecond"
+      },
+      "render-blocking-insight": {
+        "id": "render-blocking-insight",
+        "title": "Render-blocking requests",
+        "description": "Requests are blocking the initial render.",
+        "score": 0,
+        "scoreDisplayMode": "metricSavings",
+        "displayValue": "Est savings of 710 ms",
+        "metricSavings": {
+          "FCP": 250,
+          "LCP": 710
+        },
+        "details": {
+          "type": "table",
+          "headings": [
+            { "key": "url", "label": "URL", "valueType": "url" },
+            { "key": "wastedMs", "label": "Duration", "valueType": "timespanMs" }
+          ],
+          "items": [
+            { "url": "https://example.test/styles.css", "wastedMs": 710 }
+          ]
+        }
+      },
+      "uses-text-compression": {
+        "id": "uses-text-compression",
+        "title": "Enable text compression",
+        "description": "Text resources should be compressed.",
+        "score": 0,
+        "scoreDisplayMode": "binary",
+        "displayValue": "Potential savings of 12 KiB",
+        "details": {
+          "type": "opportunity",
+          "overallSavingsBytes": 12288
+        }
+      },
+      "webmcp-schema-validity": {
+        "id": "webmcp-schema-validity",
+        "title": "WebMCP schema validity",
+        "description": "Registered WebMCP tools should use valid schemas.",
+        "score": 0,
+        "scoreDisplayMode": "binary",
+        "explanation": "One registered tool has an invalid schema.",
+        "details": {
+          "type": "table",
+          "items": [
+            { "tool": "search", "error": "Missing input schema" }
+          ]
+        }
+      },
+      "llms-txt": {
+        "id": "llms-txt",
+        "title": "llms.txt",
+        "description": "Checks for a machine-readable site summary.",
+        "score": 1,
+        "scoreDisplayMode": "binary"
+      },
+      "manual-audit": {
+        "id": "manual-audit",
+        "title": "Manual audit",
+        "description": "This audit requires manual verification.",
+        "score": null,
+        "scoreDisplayMode": "manual"
+      }
+    },
+    "entities": [
+      {
+        "name": "Example",
+        "origins": ["https://example.test"],
+        "isFirstParty": true,
+        "isUnrecognized": false
+      }
+    ]
+  }
+}
