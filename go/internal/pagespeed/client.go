@@ -5,11 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/ncosentino/google-psi-mcp/go/internal/apihttp"
 )
 
 const (
@@ -104,28 +105,23 @@ func ResolveStrategies(strategy string) ([]string, error) {
 
 // Analyze runs one validated PageSpeed Insights request.
 func (c *Client) Analyze(ctx context.Context, analysisRequest AnalysisRequest) (*AnalysisResult, error) {
-	req, err := c.buildRequest(ctx, analysisRequest)
-	if err != nil {
-		return nil, fmt.Errorf("building request: %w", err)
-	}
-
-	resp, err := c.httpClient.Do(req)
+	response, err := apihttp.Do(ctx, c.httpClient, func() (*http.Request, error) {
+		return c.buildRequest(ctx, analysisRequest)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response body: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("PSI API returned HTTP %d: %s", resp.StatusCode, truncate(string(body), 300))
+	if response.StatusCode != http.StatusOK {
+		return nil, &apihttp.StatusError{
+			Service:     "PSI API",
+			StatusCode:  response.StatusCode,
+			BodySnippet: truncate(string(response.Body), 300),
+		}
 	}
 
 	var raw apiResponse
-	if err := json.Unmarshal(body, &raw); err != nil {
+	if err := json.Unmarshal(response.Body, &raw); err != nil {
 		return nil, fmt.Errorf("parsing PSI response: %w", err)
 	}
 

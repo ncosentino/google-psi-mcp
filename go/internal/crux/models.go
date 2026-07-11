@@ -67,7 +67,7 @@ type URLNormalization struct {
 // Metric contains the available current statistical aggregations for one metric.
 type Metric struct {
 	// Histogram contains metric distribution buckets.
-	Histogram []HistogramBin `json:"histogram,omitempty"`
+	Histogram []HistogramBin `json:"histogram"`
 	// P75 is the 75th-percentile value when the metric supports percentiles.
 	P75 *float64 `json:"p75,omitempty"`
 	// Fractions contains labeled proportions for categorical metrics.
@@ -87,7 +87,7 @@ type HistogramBin struct {
 // HistoryMetric contains historical statistical aggregations for one metric.
 type HistoryMetric struct {
 	// Histogram contains metric distribution timeseries.
-	Histogram []HistoryHistogramBin `json:"histogram,omitempty"`
+	Histogram []HistoryHistogramBin `json:"histogram"`
 	// P75 contains ordered 75th-percentile values; unavailable periods are null.
 	P75 []*float64 `json:"p75,omitempty"`
 	// Fractions contains ordered labeled proportions; unavailable periods are null.

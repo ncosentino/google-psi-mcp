@@ -11,18 +11,49 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/ncosentino/google-psi-mcp/go/internal/apihttp"
 	"github.com/ncosentino/google-psi-mcp/go/internal/config"
 	"github.com/ncosentino/google-psi-mcp/go/internal/crux"
 	"github.com/ncosentino/google-psi-mcp/go/internal/pagespeed"
 )
 
 var version = "dev"
+
+const (
+	maxBatchURLs          = 10
+	maxConcurrentAnalyses = 4
+)
+
+type pageAnalyzer interface {
+	Analyze(context.Context, pagespeed.AnalysisRequest) (*pagespeed.AnalysisResult, error)
+}
+
+type cruxQuerier interface {
+	QueryCurrent(context.Context, crux.QueryRequest) (*crux.Result, error)
+	QueryHistory(context.Context, crux.QueryRequest) (*crux.HistoryResult, error)
+}
+
+type analysisFailure struct {
+	InputURL  string `json:"inputUrl"`
+	Strategy  string `json:"strategy"`
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Retryable bool   `json:"retryable"`
+}
+
+type analysisResponse struct {
+	Results []*pagespeed.AnalysisResult `json:"results"`
+	Errors  []analysisFailure           `json:"errors"`
+}
 
 func main() {
 	apiKeyFlag := flag.String("api-key", "", "Google PageSpeed Insights API key")
@@ -52,7 +83,7 @@ func main() {
 }
 
 // newServer builds the MCP server independently of its transport.
-func newServer(client *pagespeed.Client, cruxClient *crux.Client) *mcp.Server {
+func newServer(client pageAnalyzer, cruxClient cruxQuerier) *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "google-psi-mcp",
 		Version: version,
@@ -165,51 +196,131 @@ type cruxHistoryInput struct {
 // analyzePages runs PSI analysis for the given URLs and strategy, returning a JSON tool result.
 func analyzePages(
 	ctx context.Context,
-	client *pagespeed.Client,
+	client pageAnalyzer,
 	urls []string,
 	strategy string,
 	categories []string,
 	locale string,
 ) (*mcp.CallToolResult, any, error) {
+	if len(urls) == 0 {
+		return nil, nil, fmt.Errorf("at least one URL is required")
+	}
+	if len(urls) > maxBatchURLs {
+		return nil, nil, fmt.Errorf("at most %d URLs may be analyzed per call", maxBatchURLs)
+	}
+
 	strategies, err := pagespeed.ResolveStrategies(strategy)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	type analysisError struct {
-		InputURL string `json:"inputUrl"`
-		Strategy string `json:"strategy"`
-		Message  string `json:"message"`
-	}
-
-	type analysisResponse struct {
-		Results []*pagespeed.AnalysisResult `json:"results"`
-		Errors  []analysisError             `json:"errors"`
-	}
-
-	response := analysisResponse{}
-	for _, u := range urls {
-		for _, s := range strategies {
-			analysisRequest, err := pagespeed.NewAnalysisRequest(u, s, categories, locale)
+	requests := make([]pagespeed.AnalysisRequest, 0, len(urls)*len(strategies))
+	for _, inputURL := range urls {
+		for _, selectedStrategy := range strategies {
+			request, err := pagespeed.NewAnalysisRequest(
+				inputURL,
+				selectedStrategy,
+				categories,
+				locale,
+			)
 			if err != nil {
 				return nil, nil, err
 			}
+			requests = append(requests, request)
+		}
+	}
 
-			r, err := client.Analyze(ctx, analysisRequest)
-			if err != nil {
-				slog.Warn("PSI analysis failed", "url", u, "strategy", s, "err", err)
-				response.Errors = append(response.Errors, analysisError{
-					InputURL: u,
-					Strategy: s,
-					Message:  fmt.Sprintf("error analyzing %s (%s): %v", u, s, err),
-				})
-				continue
+	type analysisEntry struct {
+		result  *pagespeed.AnalysisResult
+		failure *analysisFailure
+	}
+
+	entries := make([]analysisEntry, len(requests))
+	semaphore := make(chan struct{}, maxConcurrentAnalyses)
+	var waitGroup sync.WaitGroup
+	for index, request := range requests {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			select {
+			case semaphore <- struct{}{}:
+				defer func() { <-semaphore }()
+			case <-ctx.Done():
+				return
 			}
-			response.Results = append(response.Results, r)
+
+			result, err := client.Analyze(ctx, request)
+			if err != nil {
+				slog.Warn(
+					"PSI analysis failed",
+					"url",
+					request.URL,
+					"strategy",
+					request.Strategy,
+					"err",
+					err,
+				)
+				failure := classifyAnalysisFailure(request, err)
+				entries[index].failure = &failure
+				return
+			}
+			entries[index].result = result
+		}()
+	}
+	waitGroup.Wait()
+
+	if ctx.Err() != nil {
+		return nil, nil, ctx.Err()
+	}
+
+	response := analysisResponse{
+		Results: make([]*pagespeed.AnalysisResult, 0, len(entries)),
+		Errors:  make([]analysisFailure, 0),
+	}
+	for _, entry := range entries {
+		if entry.result != nil {
+			response.Results = append(response.Results, entry.result)
+		}
+		if entry.failure != nil {
+			response.Errors = append(response.Errors, *entry.failure)
 		}
 	}
 
 	return jsonToolResult(response)
+}
+
+func classifyAnalysisFailure(
+	request pagespeed.AnalysisRequest,
+	err error,
+) analysisFailure {
+	failure := analysisFailure{
+		InputURL: request.URL,
+		Strategy: request.Strategy,
+		Code:     "request_failed",
+		Message:  err.Error(),
+	}
+
+	var statusError *apihttp.StatusError
+	if errors.As(err, &statusError) {
+		failure.Retryable = statusError.Retryable()
+		switch {
+		case statusError.StatusCode == 429:
+			failure.Code = "rate_limited"
+		case statusError.StatusCode >= 500:
+			failure.Code = "upstream_unavailable"
+		default:
+			failure.Code = "upstream_rejected"
+		}
+		return failure
+	}
+
+	var networkError net.Error
+	if errors.Is(err, context.DeadlineExceeded) ||
+		(errors.As(err, &networkError) && networkError.Timeout()) {
+		failure.Code = "timeout"
+		failure.Retryable = true
+	}
+	return failure
 }
 
 func jsonToolResult(value any) (*mcp.CallToolResult, any, error) {

@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/ncosentino/google-psi-mcp/go/internal/apihttp"
 )
 
 const (
@@ -183,35 +184,30 @@ func (c *Client) post(
 	query.Set("key", c.apiKey)
 	endpointURL.RawQuery = query.Encode()
 
-	httpRequest, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		endpointURL.String(),
-		bytes.NewReader(encodedBody),
-	)
-	if err != nil {
-		return fmt.Errorf("building CrUX request: %w", err)
-	}
-	httpRequest.Header.Set("Content-Type", "application/json")
-
-	response, err := c.httpClient.Do(httpRequest)
+	response, err := apihttp.Do(ctx, c.httpClient, func() (*http.Request, error) {
+		httpRequest, err := http.NewRequestWithContext(
+			ctx,
+			http.MethodPost,
+			endpointURL.String(),
+			bytes.NewReader(encodedBody),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("building CrUX request: %w", err)
+		}
+		httpRequest.Header.Set("Content-Type", "application/json")
+		return httpRequest, nil
+	})
 	if err != nil {
 		return fmt.Errorf("executing CrUX request: %w", err)
 	}
-	defer func() { _ = response.Body.Close() }()
-
-	responseBody, err := io.ReadAll(response.Body)
-	if err != nil {
-		return fmt.Errorf("reading CrUX response: %w", err)
-	}
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf(
-			"CrUX API returned HTTP %d: %s",
-			response.StatusCode,
-			truncate(string(responseBody), 500),
-		)
+		return &apihttp.StatusError{
+			Service:     "CrUX API",
+			StatusCode:  response.StatusCode,
+			BodySnippet: truncate(string(response.Body), 500),
+		}
 	}
-	if err := json.Unmarshal(responseBody, output); err != nil {
+	if err := json.Unmarshal(response.Body, output); err != nil {
 		return fmt.Errorf("parsing CrUX response: %w", err)
 	}
 	return nil

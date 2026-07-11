@@ -41,7 +41,7 @@ type AnalysisMetadata struct {
 	// MainDocumentURL is the final main-document request URL.
 	MainDocumentURL string `json:"mainDocumentUrl,omitempty"`
 	// RunWarnings contains warnings emitted by Lighthouse during the run.
-	RunWarnings []string `json:"runWarnings,omitempty"`
+	RunWarnings []string `json:"runWarnings"`
 	// RuntimeError identifies a fatal Lighthouse runtime failure.
 	RuntimeError *RuntimeError `json:"runtimeError,omitempty"`
 }
@@ -89,7 +89,7 @@ type FieldMetric struct {
 	// Rating is good, needs-improvement, poor, or unavailable.
 	Rating string `json:"rating"`
 	// Distributions contains the proportions in the upstream rating buckets.
-	Distributions []FieldDistribution `json:"distributions,omitempty"`
+	Distributions []FieldDistribution `json:"distributions"`
 }
 
 // FieldDistribution contains one real-user metric histogram bucket.
@@ -121,7 +121,7 @@ type LabData struct {
 	// ManualAuditIDs contains audits requiring human verification.
 	ManualAuditIDs []string `json:"manualAuditIds"`
 	// Entities contains Lighthouse first-party and third-party classifications.
-	Entities []Entity `json:"entities,omitempty"`
+	Entities []Entity `json:"entities"`
 }
 
 // CategoryResult contains one Lighthouse category result.
@@ -175,7 +175,7 @@ type LighthouseAudit struct {
 	// ErrorMessage contains an audit execution error.
 	ErrorMessage string `json:"errorMessage,omitempty"`
 	// Warnings contains audit-specific warnings.
-	Warnings []string `json:"warnings,omitempty"`
+	Warnings []string `json:"warnings"`
 	// NumericValue is the audit's raw numeric value when available.
 	NumericValue *float64 `json:"numericValue,omitempty"`
 	// NumericUnit identifies the unit of NumericValue.
@@ -411,9 +411,18 @@ func normalizeRating(category string) string {
 
 func parseLabData(raw *rawLighthouseResult) *LabData {
 	data := &LabData{
-		Categories: make(map[string]CategoryResult, len(raw.Categories)),
-		Metrics:    make(map[string]LabMetric, len(labMetricNames)),
-		Entities:   raw.Entities,
+		Categories:            make(map[string]CategoryResult, len(raw.Categories)),
+		Metrics:               make(map[string]LabMetric, len(labMetricNames)),
+		Insights:              []LighthouseAudit{},
+		Diagnostics:           []LighthouseAudit{},
+		UnscoredAudits:        []LighthouseAudit{},
+		PassedAuditIDs:        []string{},
+		NotApplicableAuditIDs: []string{},
+		ManualAuditIDs:        []string{},
+		Entities:              append([]Entity(nil), raw.Entities...),
+	}
+	if data.Entities == nil {
+		data.Entities = []Entity{}
 	}
 
 	insightIDs := make(map[string]struct{})
@@ -536,7 +545,7 @@ func normalizeAudit(id string, raw *rawAudit) LighthouseAudit {
 
 func normalizeJSONMessages(values []json.RawMessage) []string {
 	if len(values) == 0 {
-		return nil
+		return []string{}
 	}
 
 	messages := make([]string, 0, len(values))

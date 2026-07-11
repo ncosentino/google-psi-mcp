@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text;
+using PageSpeedMcp.Infrastructure;
 
 namespace PageSpeedMcp.PageSpeed;
 
@@ -17,7 +18,11 @@ internal sealed class PageSpeedClient(HttpClient httpClient, string apiKey)
         CancellationToken cancellationToken = default)
     {
         var requestUrl = BuildRequestUrl(request);
-        using var response = await httpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
+        using var response = await httpClient
+            .SendWithRetryAsync(
+                () => new HttpRequestMessage(HttpMethod.Get, requestUrl),
+                cancellationToken)
+            .ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
         {

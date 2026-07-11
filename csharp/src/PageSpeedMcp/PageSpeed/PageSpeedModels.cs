@@ -15,7 +15,12 @@ internal sealed record AnalysisResponse(
     IReadOnlyList<AnalysisFailure> Errors);
 
 /// <summary>One failed URL and strategy analysis.</summary>
-internal sealed record AnalysisFailure(string InputUrl, string Strategy, string Message);
+internal sealed record AnalysisFailure(
+    string InputUrl,
+    string Strategy,
+    string Code,
+    string Message,
+    bool Retryable);
 
 /// <summary>Source and timing metadata for a PageSpeed Insights result.</summary>
 internal sealed record AnalysisMetadata(

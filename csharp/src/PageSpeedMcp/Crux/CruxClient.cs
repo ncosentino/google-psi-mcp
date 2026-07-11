@@ -1,5 +1,6 @@
-using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Text.Json;
+using PageSpeedMcp.Infrastructure;
 
 namespace PageSpeedMcp.Crux;
 
@@ -79,11 +80,21 @@ internal sealed class CruxClient
         CancellationToken cancellationToken)
     {
         var requestUri = $"{endpoint}?key={Uri.EscapeDataString(_apiKey)}";
-        using var response = await _httpClient.PostAsJsonAsync(
-            requestUri,
+        var encodedBody = JsonSerializer.SerializeToUtf8Bytes(
             body,
-            CruxJsonContext.Default.CruxQueryBody,
-            cancellationToken).ConfigureAwait(false);
+            CruxJsonContext.Default.CruxQueryBody);
+        using var response = await _httpClient
+            .SendWithRetryAsync(
+                () =>
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
+                    request.Content = new ByteArrayContent(encodedBody);
+                    request.Content.Headers.ContentType =
+                        new MediaTypeHeaderValue("application/json");
+                    return request;
+                },
+                cancellationToken)
+            .ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
         {

@@ -9,6 +9,9 @@ namespace PageSpeedMcp.Tools;
 [McpServerToolType]
 internal sealed class PageSpeedTool(PageSpeedClient client)
 {
+    private const int MaxBatchUrls = 10;
+    private const int MaxConcurrentAnalyses = 4;
+
     [McpServerTool(Name = "analyze_page")]
     [Description("Analyze a single URL using Google PageSpeed Insights. Separates real-user CrUX field data from synthetic Lighthouse lab data and returns Lighthouse 13 insights with structured details. Agentic browsing is experimental and must be requested explicitly.")]
     internal async Task<string> AnalyzePage(
@@ -52,6 +55,17 @@ internal sealed class PageSpeedTool(PageSpeedClient client)
         string? locale,
         CancellationToken cancellationToken)
     {
+        if (urls.Length == 0)
+        {
+            throw new ArgumentException("At least one URL is required.", nameof(urls));
+        }
+        if (urls.Length > MaxBatchUrls)
+        {
+            throw new ArgumentException(
+                $"At most {MaxBatchUrls} URLs may be analyzed per call.",
+                nameof(urls));
+        }
+
         var strategies = PageSpeedAnalysisRequest.ResolveStrategies(strategy);
         var requests = urls
             .SelectMany(url => strategies.Select(
@@ -62,8 +76,9 @@ internal sealed class PageSpeedTool(PageSpeedClient client)
                     locale)))
             .ToArray();
 
+        using var semaphore = new SemaphoreSlim(MaxConcurrentAnalyses);
         var tasks = requests
-            .Select(request => RunSingleAnalysisAsync(request, cancellationToken))
+            .Select(request => RunSingleAnalysisAsync(request, semaphore, cancellationToken))
             .ToArray();
 
         var entries = await Task.WhenAll(tasks).ConfigureAwait(false);
@@ -74,8 +89,10 @@ internal sealed class PageSpeedTool(PageSpeedClient client)
 
     private async Task<AnalysisEntry> RunSingleAnalysisAsync(
         PageSpeedAnalysisRequest request,
+        SemaphoreSlim semaphore,
         CancellationToken cancellationToken)
     {
+        await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             return new AnalysisEntry(
@@ -89,13 +106,15 @@ internal sealed class PageSpeedTool(PageSpeedClient client)
                 new AnalysisFailure(
                     request.Url,
                     request.Strategy,
-                    "The PageSpeed Insights request timed out."));
+                    "timeout",
+                    "The PageSpeed Insights request timed out.",
+                    Retryable: true));
         }
         catch (HttpRequestException ex)
         {
             return new AnalysisEntry(
                 null,
-                new AnalysisFailure(request.Url, request.Strategy, ex.Message));
+                ClassifyHttpFailure(request, ex));
         }
         catch (JsonException ex)
         {
@@ -104,8 +123,37 @@ internal sealed class PageSpeedTool(PageSpeedClient client)
                 new AnalysisFailure(
                     request.Url,
                     request.Strategy,
-                    $"The PageSpeed Insights response was invalid: {ex.Message}"));
+                    "invalid_response",
+                    $"The PageSpeed Insights response was invalid: {ex.Message}",
+                    Retryable: false));
         }
+        finally
+        {
+            semaphore.Release();
+        }
+    }
+
+    private static AnalysisFailure ClassifyHttpFailure(
+        PageSpeedAnalysisRequest request,
+        HttpRequestException exception)
+    {
+        int? statusCode = exception.StatusCode is null
+            ? null
+            : (int)exception.StatusCode.Value;
+        var retryable = statusCode is 429 or >= 500;
+        var code = statusCode switch
+        {
+            429 => "rate_limited",
+            >= 500 => "upstream_unavailable",
+            not null => "upstream_rejected",
+            _ => "request_failed",
+        };
+        return new AnalysisFailure(
+            request.Url,
+            request.Strategy,
+            code,
+            exception.Message,
+            retryable);
     }
 
     private sealed record AnalysisEntry(PageSpeedAnalysis? Result, AnalysisFailure? Error);
