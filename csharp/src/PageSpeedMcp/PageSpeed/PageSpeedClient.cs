@@ -12,43 +12,29 @@ internal sealed class PageSpeedClient(HttpClient httpClient, string apiKey)
     /// <param name="url">The URL to analyze.</param>
     /// <param name="strategy">"mobile" or "desktop".</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public async Task<PageSpeedResult> AnalyzeAsync(
+    public async Task<PageSpeedAnalysis> AnalyzeAsync(
         string url,
         string strategy,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var requestUrl = BuildRequestUrl(url, strategy);
-            var response = await httpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
+        var requestUrl = BuildRequestUrl(url, strategy);
+        using var response = await httpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                var snippet = body.Length > 300 ? body[..300] + "..." : body;
-                return new PageSpeedResult(url, strategy, DateTimeOffset.UtcNow,
-                    null, null, null, null, null,
-                    Error: $"PSI API returned HTTP {(int)response.StatusCode} {response.StatusCode}: {snippet}");
-            }
-
-            var raw = await response.Content
-                .ReadFromJsonAsync(PsiJsonContext.Default.PsiApiResponse, cancellationToken)
-                .ConfigureAwait(false);
-
-            return PageSpeedResultParser.Parse(url, strategy, raw);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        if (!response.IsSuccessStatusCode)
         {
-            return new PageSpeedResult(url, strategy, DateTimeOffset.UtcNow,
-                null, null, null, null, null,
-                Error: $"Request timed out after {httpClient.Timeout.TotalSeconds:0}s");
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var snippet = body.Length > 300 ? body[..300] + "..." : body;
+            throw new HttpRequestException(
+                $"PSI API returned HTTP {(int)response.StatusCode} {response.StatusCode}: {snippet}",
+                inner: null,
+                response.StatusCode);
         }
-        catch (Exception ex)
-        {
-            return new PageSpeedResult(url, strategy, DateTimeOffset.UtcNow,
-                null, null, null, null, null,
-                Error: $"{ex.GetType().Name}: {ex.Message}");
-        }
+
+        var raw = await response.Content
+            .ReadFromJsonAsync(PsiJsonContext.Default.PsiApiResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return PageSpeedResultParser.Parse(url, strategy, raw);
     }
 
     private string BuildRequestUrl(string url, string strategy)

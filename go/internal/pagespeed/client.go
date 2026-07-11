@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	apiBaseURL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
+	apiBaseURL  = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 	httpTimeout = 60 * time.Second
 )
 
@@ -32,7 +32,7 @@ func NewClient(apiKey string) *Client {
 
 // Analyze runs a PageSpeed Insights analysis for the given URL and strategy.
 // Strategy must be "mobile" or "desktop".
-func (c *Client) Analyze(ctx context.Context, targetURL, strategy string) (*Result, error) {
+func (c *Client) Analyze(ctx context.Context, targetURL, strategy string) (*AnalysisResult, error) {
 	req, err := c.buildRequest(ctx, targetURL, strategy)
 	if err != nil {
 		return nil, fmt.Errorf("building request: %w", err)

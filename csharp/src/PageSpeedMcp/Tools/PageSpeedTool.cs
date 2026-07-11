@@ -16,8 +16,8 @@ internal sealed class PageSpeedTool(PageSpeedClient client)
         [Description("Analysis strategy: mobile, desktop, or both. Defaults to both.")] string strategy = "both",
         CancellationToken cancellationToken = default)
     {
-        var results = await RunAnalysisAsync([url], strategy, cancellationToken).ConfigureAwait(false);
-        return JsonSerializer.Serialize(results, PsiJsonContext.Default.PageSpeedResultArray);
+        var response = await RunAnalysisAsync([url], strategy, cancellationToken).ConfigureAwait(false);
+        return JsonSerializer.Serialize(response, PsiJsonContext.Default.AnalysisResponse);
     }
 
     [McpServerTool(Name = "analyze_pages")]
@@ -27,11 +27,11 @@ internal sealed class PageSpeedTool(PageSpeedClient client)
         [Description("Analysis strategy: mobile, desktop, or both. Defaults to both.")] string strategy = "both",
         CancellationToken cancellationToken = default)
     {
-        var results = await RunAnalysisAsync(urls, strategy, cancellationToken).ConfigureAwait(false);
-        return JsonSerializer.Serialize(results, PsiJsonContext.Default.PageSpeedResultArray);
+        var response = await RunAnalysisAsync(urls, strategy, cancellationToken).ConfigureAwait(false);
+        return JsonSerializer.Serialize(response, PsiJsonContext.Default.AnalysisResponse);
     }
 
-    private async Task<PageSpeedResult[]> RunAnalysisAsync(
+    private async Task<AnalysisResponse> RunAnalysisAsync(
         string[] urls,
         string strategy,
         CancellationToken cancellationToken)
@@ -41,9 +41,44 @@ internal sealed class PageSpeedTool(PageSpeedClient client)
             : [strategy.ToLowerInvariant()];
 
         var tasks = urls
-            .SelectMany(u => strategies.Select(s => client.AnalyzeAsync(u, s, cancellationToken)))
+            .SelectMany(url => strategies.Select(
+                selectedStrategy => RunSingleAnalysisAsync(url, selectedStrategy, cancellationToken)))
             .ToArray();
 
-        return await Task.WhenAll(tasks).ConfigureAwait(false);
+        var entries = await Task.WhenAll(tasks).ConfigureAwait(false);
+        return new AnalysisResponse(
+            entries.Where(entry => entry.Result is not null).Select(entry => entry.Result!).ToArray(),
+            entries.Where(entry => entry.Error is not null).Select(entry => entry.Error!).ToArray());
     }
+
+    private async Task<AnalysisEntry> RunSingleAnalysisAsync(
+        string url,
+        string strategy,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return new AnalysisEntry(
+                await client.AnalyzeAsync(url, strategy, cancellationToken).ConfigureAwait(false),
+                null);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new AnalysisEntry(
+                null,
+                new AnalysisFailure(url, strategy, "The PageSpeed Insights request timed out."));
+        }
+        catch (HttpRequestException ex)
+        {
+            return new AnalysisEntry(null, new AnalysisFailure(url, strategy, ex.Message));
+        }
+        catch (JsonException ex)
+        {
+            return new AnalysisEntry(
+                null,
+                new AnalysisFailure(url, strategy, $"The PageSpeed Insights response was invalid: {ex.Message}"));
+        }
+    }
+
+    private sealed record AnalysisEntry(PageSpeedAnalysis? Result, AnalysisFailure? Error);
 }

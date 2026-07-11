@@ -92,32 +92,35 @@ func analyzePages(ctx context.Context, client *pagespeed.Client, urls []string, 
 
 	strategies := resolveStrategies(strategy)
 
-	type entry struct {
-		URL      string            `json:"url"`
-		Results  []*pagespeed.Result `json:"results"`
-		Error    string            `json:"error,omitempty"`
+	type analysisError struct {
+		InputURL string `json:"inputUrl"`
+		Strategy string `json:"strategy"`
+		Message  string `json:"message"`
 	}
 
-	entries := make([]entry, 0, len(urls))
+	type analysisResponse struct {
+		Results []*pagespeed.AnalysisResult `json:"results"`
+		Errors  []analysisError             `json:"errors"`
+	}
 
+	response := analysisResponse{}
 	for _, u := range urls {
-		var results []*pagespeed.Result
-		var errMsg string
-
 		for _, s := range strategies {
 			r, err := client.Analyze(ctx, u, s)
 			if err != nil {
-				errMsg = fmt.Sprintf("error analyzing %s (%s): %v", u, s, err)
 				slog.Warn("PSI analysis failed", "url", u, "strategy", s, "err", err)
-				break
+				response.Errors = append(response.Errors, analysisError{
+					InputURL: u,
+					Strategy: s,
+					Message:  fmt.Sprintf("error analyzing %s (%s): %v", u, s, err),
+				})
+				continue
 			}
-			results = append(results, r)
+			response.Results = append(response.Results, r)
 		}
-
-		entries = append(entries, entry{URL: u, Results: results, Error: errMsg})
 	}
 
-	b, err := json.Marshal(entries)
+	b, err := json.Marshal(response)
 	if err != nil {
 		return nil, nil, fmt.Errorf("marshalling results: %w", err)
 	}
