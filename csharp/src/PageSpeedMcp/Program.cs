@@ -26,7 +26,7 @@ builder.Logging.SetMinimumLevel(LogLevel.Warning);
 builder.Services
     .AddHttpClient(nameof(PageSpeedClient), http =>
     {
-        http.Timeout = TimeSpan.FromSeconds(60);
+        http.Timeout = TimeSpan.FromSeconds(120);
     });
 
 builder.Services.AddTransient<PageSpeedClient>(sp =>

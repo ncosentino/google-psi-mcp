@@ -48,20 +48,20 @@ func main() {
 	mcp.AddTool(srv,
 		&mcp.Tool{
 			Name:        "analyze_page",
-			Description: "Analyze a single URL using Google PageSpeed Insights. Returns Core Web Vitals scores, category scores (performance, SEO, accessibility, best-practices), and actionable audit findings.",
+			Description: "Analyze a single URL using Google PageSpeed Insights. Separates real-user CrUX field data from synthetic Lighthouse lab data and returns Lighthouse 13 insights with structured details. strategy defaults to both. categories defaults to performance, SEO, accessibility, and best-practices; agentic-browsing is experimental and must be requested explicitly.",
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input analyzePageInput) (*mcp.CallToolResult, any, error) {
-			return analyzePages(ctx, client, []string{input.URL}, input.Strategy)
+			return analyzePages(ctx, client, []string{input.URL}, input.Strategy, input.Categories, input.Locale)
 		},
 	)
 
 	mcp.AddTool(srv,
 		&mcp.Tool{
 			Name:        "analyze_pages",
-			Description: "Analyze multiple URLs using Google PageSpeed Insights in a single call. Returns an array of results, one per URL.",
+			Description: "Analyze multiple URLs using Google PageSpeed Insights. Returns separate real-user field data and Lighthouse lab data for every URL and strategy. strategy defaults to both. categories defaults to performance, SEO, accessibility, and best-practices; agentic-browsing is experimental and must be requested explicitly.",
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input analyzePagesInput) (*mcp.CallToolResult, any, error) {
-			return analyzePages(ctx, client, input.URLs, input.Strategy)
+			return analyzePages(ctx, client, input.URLs, input.Strategy, input.Categories, input.Locale)
 		},
 	)
 
@@ -74,23 +74,33 @@ func main() {
 
 // analyzePageInput is the input schema for the analyze_page tool.
 type analyzePageInput struct {
-	URL      string `json:"url"`
-	Strategy string `json:"strategy"`
+	URL        string   `json:"url"`
+	Strategy   string   `json:"strategy,omitempty"`
+	Categories []string `json:"categories,omitempty"`
+	Locale     string   `json:"locale,omitempty"`
 }
 
 // analyzePagesInput is the input schema for the analyze_pages tool.
 type analyzePagesInput struct {
-	URLs     []string `json:"urls"`
-	Strategy string   `json:"strategy"`
+	URLs       []string `json:"urls"`
+	Strategy   string   `json:"strategy,omitempty"`
+	Categories []string `json:"categories,omitempty"`
+	Locale     string   `json:"locale,omitempty"`
 }
 
 // analyzePages runs PSI analysis for the given URLs and strategy, returning a JSON tool result.
-func analyzePages(ctx context.Context, client *pagespeed.Client, urls []string, strategy string) (*mcp.CallToolResult, any, error) {
-	if strategy == "" {
-		strategy = "both"
+func analyzePages(
+	ctx context.Context,
+	client *pagespeed.Client,
+	urls []string,
+	strategy string,
+	categories []string,
+	locale string,
+) (*mcp.CallToolResult, any, error) {
+	strategies, err := pagespeed.ResolveStrategies(strategy)
+	if err != nil {
+		return nil, nil, err
 	}
-
-	strategies := resolveStrategies(strategy)
 
 	type analysisError struct {
 		InputURL string `json:"inputUrl"`
@@ -106,7 +116,12 @@ func analyzePages(ctx context.Context, client *pagespeed.Client, urls []string, 
 	response := analysisResponse{}
 	for _, u := range urls {
 		for _, s := range strategies {
-			r, err := client.Analyze(ctx, u, s)
+			analysisRequest, err := pagespeed.NewAnalysisRequest(u, s, categories, locale)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			r, err := client.Analyze(ctx, analysisRequest)
 			if err != nil {
 				slog.Warn("PSI analysis failed", "url", u, "strategy", s, "err", err)
 				response.Errors = append(response.Errors, analysisError{
@@ -130,11 +145,4 @@ func analyzePages(ctx context.Context, client *pagespeed.Client, urls []string, 
 			&mcp.TextContent{Text: string(b)},
 		},
 	}, nil, nil
-}
-
-func resolveStrategies(strategy string) []string {
-	if strategy == "both" {
-		return []string{"mobile", "desktop"}
-	}
-	return []string{strategy}
 }

@@ -13,11 +13,10 @@ internal sealed class PageSpeedClient(HttpClient httpClient, string apiKey)
     /// <param name="strategy">"mobile" or "desktop".</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     public async Task<PageSpeedAnalysis> AnalyzeAsync(
-        string url,
-        string strategy,
+        PageSpeedAnalysisRequest request,
         CancellationToken cancellationToken = default)
     {
-        var requestUrl = BuildRequestUrl(url, strategy);
+        var requestUrl = BuildRequestUrl(request);
         using var response = await httpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
@@ -34,19 +33,24 @@ internal sealed class PageSpeedClient(HttpClient httpClient, string apiKey)
             .ReadFromJsonAsync(PsiJsonContext.Default.PsiApiResponse, cancellationToken)
             .ConfigureAwait(false);
 
-        return PageSpeedResultParser.Parse(url, strategy, raw);
+        return PageSpeedResultParser.Parse(request.Url, request.Strategy, raw);
     }
 
-    private string BuildRequestUrl(string url, string strategy)
+    private string BuildRequestUrl(PageSpeedAnalysisRequest request)
     {
         var sb = new StringBuilder(BaseUrl)
-            .Append("?url=").Append(Uri.EscapeDataString(url))
-            .Append("&strategy=").Append(strategy)
-            .Append("&key=").Append(apiKey)
-            .Append("&category=performance")
-            .Append("&category=seo")
-            .Append("&category=accessibility")
-            .Append("&category=best-practices");
+            .Append("?url=").Append(Uri.EscapeDataString(request.Url))
+            .Append("&strategy=").Append(request.Strategy)
+            .Append("&key=").Append(apiKey);
+
+        foreach (var category in request.Categories)
+        {
+            sb.Append("&category=").Append(Uri.EscapeDataString(category));
+        }
+        if (request.Locale is not null)
+        {
+            sb.Append("&locale=").Append(Uri.EscapeDataString(request.Locale));
+        }
         return sb.ToString();
     }
 }

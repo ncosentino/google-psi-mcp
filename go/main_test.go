@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"slices"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/ncosentino/google-psi-mcp/go/internal/pagespeed"
 )
@@ -26,7 +28,14 @@ func TestNewServer_RegistersTools(_ *testing.T) {
 			Description: "test",
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input analyzePageInput) (*mcp.CallToolResult, any, error) {
-			return analyzePages(ctx, client, []string{input.URL}, input.Strategy)
+			return analyzePages(
+				ctx,
+				client,
+				[]string{input.URL},
+				input.Strategy,
+				input.Categories,
+				input.Locale,
+			)
 		},
 	)
 
@@ -36,38 +45,52 @@ func TestNewServer_RegistersTools(_ *testing.T) {
 			Description: "test",
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input analyzePagesInput) (*mcp.CallToolResult, any, error) {
-			return analyzePages(ctx, client, input.URLs, input.Strategy)
+			return analyzePages(
+				ctx,
+				client,
+				input.URLs,
+				input.Strategy,
+				input.Categories,
+				input.Locale,
+			)
 		},
 	)
 }
 
-func TestResolveStrategies_Both(t *testing.T) {
-	got := resolveStrategies("both")
-	if len(got) != 2 {
-		t.Fatalf("expected 2 strategies, got %d", len(got))
-	}
-	if got[0] != "mobile" || got[1] != "desktop" {
-		t.Fatalf("unexpected strategies: %v", got)
-	}
-}
+func TestAnalyzeInputs_OptionalControls_AreNotRequired(t *testing.T) {
+	t.Parallel()
 
-func TestResolveStrategies_Single(t *testing.T) {
-	for _, s := range []string{"mobile", "desktop"} {
-		t.Run(s, func(t *testing.T) {
-			got := resolveStrategies(s)
-			if len(got) != 1 || got[0] != s {
-				t.Fatalf("expected [%s], got %v", s, got)
+	tests := []struct {
+		name  string
+		infer func() (*jsonschema.Schema, error)
+	}{
+		{
+			name: "analyze_page",
+			infer: func() (*jsonschema.Schema, error) {
+				return jsonschema.For[analyzePageInput](nil)
+			},
+		},
+		{
+			name: "analyze_pages",
+			infer: func() (*jsonschema.Schema, error) {
+				return jsonschema.For[analyzePagesInput](nil)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			schema, err := test.infer()
+			if err != nil {
+				t.Fatalf("schema inference failed: %v", err)
+			}
+			for _, field := range []string{"strategy", "categories", "locale"} {
+				if slices.Contains(schema.Required, field) {
+					t.Errorf("%s must not be required (got %v)", field, schema.Required)
+				}
 			}
 		})
-	}
-}
-
-func TestResolveStrategies_DefaultsOnEmpty(t *testing.T) {
-	// Empty strategy is resolved to "both" inside analyzePages, but
-	// resolveStrategies itself receives a non-empty value by then.
-	// Verify the helper returns a single-element slice for any non-"both" value.
-	got := resolveStrategies("mobile")
-	if len(got) != 1 {
-		t.Fatalf("expected 1, got %d: %v", len(got), got)
 	}
 }
