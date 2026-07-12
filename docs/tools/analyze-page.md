@@ -1,86 +1,53 @@
 ---
-description: MCP tool to analyze a single URL with Google PageSpeed Insights. Parameters, full response schema (Core Web Vitals, category scores, opportunities, failing audits), and example prompts.
+description: Analyze one URL with PSI field data, Lighthouse lab data, and Lighthouse 13 insights.
 ---
 
 # analyze_page
 
-Analyze a single URL with the Google PageSpeed Insights API.
-
----
+Analyze one absolute HTTP or HTTPS URL.
 
 ## Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `url` | string | Yes | The full URL to analyze (include `https://`) |
-| `strategy` | string | No | `"mobile"` (default), `"desktop"`, or `"both"` |
+| Parameter | Type | Required | Default |
+|---|---|---|---|
+| `url` | string | Yes | - |
+| `strategy` | string | No | `both` |
+| `categories` | string[] | No | performance, SEO, accessibility, best practices |
+| `locale` | string | No | PSI default |
 
-!!! warning "strategy=\"both\" -- latency warning"
-    Using `strategy="both"` makes **two sequential API calls** -- one mobile, one desktop. The PSI API can take 5-20+ seconds per call. On a slow or complex page, `strategy="both"` can easily take 30+ seconds, approaching the timeout limit of most MCP clients. Use `"mobile"` or `"desktop"` for interactive use. Reserve `"both"` for pages you know respond quickly.
+Valid strategies are `mobile`, `desktop`, and `both`.
 
----
+Valid categories are:
+
+- `performance`
+- `seo`
+- `accessibility`
+- `best-practices`
+- `agentic-browsing` (experimental)
 
 ## Response
 
-The tool returns a structured result with the following sections for each strategy analyzed:
+The response contains `results` and `errors`. Every successful result has:
 
-### Category Scores
+- `metadata`: input strategy, PSI timestamp, Lighthouse version, redirects,
+  warnings, and runtime errors.
+- `fieldData`: page and origin CrUX measurements. Missing data remains absent;
+  page-to-origin fallback is explicit.
+- `labData`: open category map, lab metrics, Lighthouse 13 insights,
+  diagnostics, audit details, metric savings, and entity classifications.
 
-Overall Lighthouse category scores (0-100):
+Field metrics use the upstream p75 rating and preserve histogram distributions.
+Lab metrics retain their Lighthouse score and unit instead of receiving
+field-data ratings.
 
-- `performance` -- overall performance score
-- `seo` -- SEO audit score
-- `accessibility` -- accessibility score
-- `bestPractices` -- best practices score
+## Examples
 
-### Core Web Vitals
-
-Each metric includes a numeric value and a `rating`:
-
-| Field | Description |
-|-------|-------------|
-| `lcp` | Largest Contentful Paint (seconds) |
-| `cls` | Cumulative Layout Shift (unitless score) |
-| `fcp` | First Contentful Paint (seconds) |
-| `ttfb` | Time to First Byte (seconds) |
-| `tbt` | Total Blocking Time (milliseconds) |
-| `speedIndex` | Speed Index (seconds) |
-
-Each has a `rating` field: `"good"`, `"needs-improvement"`, or `"poor"`.
-
-### Opportunities
-
-A list of improvements the page could make, each with:
-
-- `id` -- the Lighthouse audit ID
-- `title` -- human-readable description
-- `description` -- detailed explanation
-- `estimatedSavings` -- estimated time savings if addressed (seconds)
-
-### Failing Audits
-
-Audits the page did not pass:
-
-- `id`, `title`, `description` -- same structure as opportunities
-- `displayValue` -- the measured value (e.g., "3 elements")
-
-### Passed Audits
-
-List of audit IDs that passed, for reference.
-
----
-
-## Example Prompts
-
-```
-Analyze https://www.devleader.ca on mobile and tell me what's hurting my LCP score.
+```text
+Analyze https://www.devleader.ca on mobile. Compare real-user LCP, CLS, and INP
+with the Lighthouse lab metrics and prioritize the current insights.
 ```
 
+```text
+Run the experimental agentic-browsing category for https://www.devleader.ca
+and summarize its WebMCP and llms.txt findings.
 ```
-Check https://www.example.com on desktop. What failing audits should I fix first?
-```
-
-```
-Analyze https://www.mysite.com on mobile. Summarize the opportunities with the highest estimated savings.
-```
-

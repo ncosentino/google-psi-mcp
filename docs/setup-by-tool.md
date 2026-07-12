@@ -4,7 +4,8 @@ description: Configure the Google PageSpeed Insights MCP server in GitHub Copilo
 
 # Setup by Tool
 
-Configuration snippets for each AI tool that supports MCP. Replace the path to the binary and provide your API key via environment variable or `.env` file.
+Configuration snippets for MCP clients. Enable PageSpeed Insights for PSI tools
+and the Chrome UX Report API for direct CrUX tools.
 
 ---
 
@@ -135,3 +136,31 @@ Pass the key directly on the command line:
 
 See [Configuration](configuration.md) for the full resolution order.
 
+---
+
+## Streamable HTTP
+
+Start either binary with HTTP transport:
+
+```bash
+PORT=8080 ./psi-mcp-go-linux-amd64 \
+  --transport http \
+  --allowed-hosts localhost,127.0.0.1 \
+  --api-key your-api-key
+```
+
+Configure an HTTP-capable MCP client with:
+
+```json
+{
+  "mcpServers": {
+    "pagespeed-insights": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080"
+    }
+  }
+}
+```
+
+The transport is stateless but does not authenticate callers. Use it locally,
+on a private network, or behind an authenticated reverse proxy.

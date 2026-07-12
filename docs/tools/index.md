@@ -1,45 +1,35 @@
 ---
-description: Two MCP tools for Google PageSpeed Insights analysis. analyze_page for single URLs, analyze_pages for batch analysis. Includes Core Web Vitals thresholds and strategy guidance.
+description: Reference for PageSpeed Insights analysis, current CrUX data, and CrUX history MCP tools.
 ---
 
 # MCP Tools
 
-The server exposes two tools to your AI assistant.
+| Tool | Upstream API | Purpose |
+|---|---|---|
+| [`analyze_page`](analyze-page.md) | PageSpeed Insights v5 | Analyze one URL |
+| [`analyze_pages`](analyze-pages.md) | PageSpeed Insights v5 | Analyze up to 10 URLs |
+| [`get_crux_data`](crux-data.md) | Chrome UX Report API | Current real-user measurements |
+| [`get_crux_history`](crux-history.md) | CrUX History API | Weekly real-user timeseries |
 
-| Tool | Description |
-|------|-------------|
-| [`analyze_page`](analyze-page/) | Analyze a single URL with PageSpeed Insights |
-| [`analyze_pages`](analyze-pages/) | Analyze multiple URLs in a single call |
+## PSI versus CrUX
 
----
+PSI combines a Lighthouse lab run with a reduced CrUX field-data section. The
+direct CrUX tools provide the broader metric catalog, form-factor controls,
+collection periods, and historical trends.
 
-## Strategy Parameter
+## PSI strategies
 
-Both tools accept an optional `strategy` parameter:
+| Value | Result |
+|---|---|
+| `mobile` | One mobile Lighthouse run |
+| `desktop` | One desktop Lighthouse run |
+| `both` | Mobile and desktop runs |
 
-| Value | What it does |
-|-------|-------------|
-| `"mobile"` | Runs a mobile Lighthouse analysis (default) |
-| `"desktop"` | Runs a desktop Lighthouse analysis |
-| `"both"` | Runs mobile **then** desktop -- two sequential API calls |
+`both` is the default. Batch analysis uses at most four concurrent requests and
+returns successful results alongside structured per-request errors.
 
-!!! warning "strategy=\"both\" doubles latency"
-    The PSI API takes 5-20+ seconds per URL. Using `strategy="both"` makes two back-to-back calls. On a slow or complex page, this can exceed your MCP client's timeout. Prefer `"mobile"` or `"desktop"` for interactive use unless you specifically need both strategies.
+## PSI categories
 
----
-
-## Core Web Vitals Thresholds
-
-Google's official thresholds for each metric:
-
-| Metric | Good | Needs Improvement | Poor |
-|--------|------|-------------------|------|
-| LCP (Largest Contentful Paint) | < 2.5s | 2.5s - 4.0s | > 4.0s |
-| CLS (Cumulative Layout Shift) | < 0.1 | 0.1 - 0.25 | > 0.25 |
-| FCP (First Contentful Paint) | < 1.8s | 1.8s - 3.0s | > 3.0s |
-| TTFB (Time to First Byte) | < 0.8s | 0.8s - 1.8s | > 1.8s |
-| TBT (Total Blocking Time) | < 200ms | 200ms - 600ms | > 600ms |
-| Speed Index | < 3.4s | 3.4s - 5.8s | > 5.8s |
-
-The `analyze_page` and `analyze_pages` tools return the numeric value **and** the `rating` field (`"good"`, `"needs-improvement"`, or `"poor"`) for each metric.
-
+The default categories are performance, SEO, accessibility, and best practices.
+Use `categories` to request a subset or to opt into experimental
+`agentic-browsing`.
