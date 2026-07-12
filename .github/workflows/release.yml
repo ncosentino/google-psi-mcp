@@ -53,7 +53,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
-          go build -ldflags="-s -w" -trimpath -o "${{ matrix.artifact }}" .
+          go build -ldflags="-s -w -X main.version=${{ github.ref_name }}" -trimpath -o "${{ matrix.artifact }}" .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -100,9 +100,11 @@ jobs:
 
       - name: Publish Native AOT (${{ matrix.rid }})
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
           dotnet publish src/PageSpeedMcp/PageSpeedMcp.csproj \
             -r ${{ matrix.rid }} \
             -c Release \
+            -p:Version="$VERSION" \
             --self-contained true \
             -o ./publish/${{ matrix.rid }}
         shell: bash

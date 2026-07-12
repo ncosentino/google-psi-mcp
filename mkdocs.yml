@@ -1,6 +1,6 @@
 site_name: Google PageSpeed Insights MCP
 site_url: https://www.devleader.ca/projects/google-psi-mcp/
-site_description: Zero-dependency MCP server exposing Google PageSpeed Insights Core Web Vitals to AI assistants. Pre-built native binaries for Linux, macOS, and Windows -- no Node.js, no Python, no runtime required.
+site_description: Native MCP server for PageSpeed Insights, Lighthouse 13 insights, current CrUX data, and CrUX history.
 repo_url: https://github.com/ncosentino/google-psi-mcp
 repo_name: ncosentino/google-psi-mcp
 strict: true
@@ -40,6 +40,8 @@ nav:
     - Overview: tools/index.md
     - analyze_page: tools/analyze-page.md
     - analyze_pages: tools/analyze-pages.md
+    - get_crux_data: tools/crux-data.md
+    - get_crux_history: tools/crux-history.md
   - Setup by Tool: setup-by-tool.md
   - Configuration: configuration.md
   - Troubleshooting: troubleshooting.md

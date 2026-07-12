@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text;
+using PageSpeedMcp.Infrastructure;
 
 namespace PageSpeedMcp.PageSpeed;
 
@@ -12,55 +13,49 @@ internal sealed class PageSpeedClient(HttpClient httpClient, string apiKey)
     /// <param name="url">The URL to analyze.</param>
     /// <param name="strategy">"mobile" or "desktop".</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public async Task<PageSpeedResult> AnalyzeAsync(
-        string url,
-        string strategy,
+    public async Task<PageSpeedAnalysis> AnalyzeAsync(
+        PageSpeedAnalysisRequest request,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var requestUrl = BuildRequestUrl(url, strategy);
-            var response = await httpClient.GetAsync(requestUrl, cancellationToken).ConfigureAwait(false);
+        var requestUrl = BuildRequestUrl(request);
+        using var response = await httpClient
+            .SendWithRetryAsync(
+                () => new HttpRequestMessage(HttpMethod.Get, requestUrl),
+                cancellationToken)
+            .ConfigureAwait(false);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                var snippet = body.Length > 300 ? body[..300] + "..." : body;
-                return new PageSpeedResult(url, strategy, DateTimeOffset.UtcNow,
-                    null, null, null, null, null,
-                    Error: $"PSI API returned HTTP {(int)response.StatusCode} {response.StatusCode}: {snippet}");
-            }
-
-            var raw = await response.Content
-                .ReadFromJsonAsync(PsiJsonContext.Default.PsiApiResponse, cancellationToken)
-                .ConfigureAwait(false);
-
-            return PageSpeedResultParser.Parse(url, strategy, raw);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        if (!response.IsSuccessStatusCode)
         {
-            return new PageSpeedResult(url, strategy, DateTimeOffset.UtcNow,
-                null, null, null, null, null,
-                Error: $"Request timed out after {httpClient.Timeout.TotalSeconds:0}s");
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var snippet = body.Length > 300 ? body[..300] + "..." : body;
+            throw new HttpRequestException(
+                $"PSI API returned HTTP {(int)response.StatusCode} {response.StatusCode}: {snippet}",
+                inner: null,
+                response.StatusCode);
         }
-        catch (Exception ex)
-        {
-            return new PageSpeedResult(url, strategy, DateTimeOffset.UtcNow,
-                null, null, null, null, null,
-                Error: $"{ex.GetType().Name}: {ex.Message}");
-        }
+
+        var raw = await response.Content
+            .ReadFromJsonAsync(PsiJsonContext.Default.PsiApiResponse, cancellationToken)
+            .ConfigureAwait(false);
+
+        return PageSpeedResultParser.Parse(request.Url, request.Strategy, raw);
     }
 
-    private string BuildRequestUrl(string url, string strategy)
+    private string BuildRequestUrl(PageSpeedAnalysisRequest request)
     {
         var sb = new StringBuilder(BaseUrl)
-            .Append("?url=").Append(Uri.EscapeDataString(url))
-            .Append("&strategy=").Append(strategy)
-            .Append("&key=").Append(apiKey)
-            .Append("&category=performance")
-            .Append("&category=seo")
-            .Append("&category=accessibility")
-            .Append("&category=best-practices");
+            .Append("?url=").Append(Uri.EscapeDataString(request.Url))
+            .Append("&strategy=").Append(request.Strategy)
+            .Append("&key=").Append(apiKey);
+
+        foreach (var category in request.Categories)
+        {
+            sb.Append("&category=").Append(Uri.EscapeDataString(category));
+        }
+        if (request.Locale is not null)
+        {
+            sb.Append("&locale=").Append(Uri.EscapeDataString(request.Locale));
+        }
         return sb.ToString();
     }
 }

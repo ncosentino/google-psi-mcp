@@ -1,59 +1,64 @@
 ---
-description: Get started with the Google PageSpeed Insights MCP server. Get an API key, download a native binary, and configure your AI tool in three steps.
+description: Enable Google APIs, download a native binary, and configure the MCP server.
 ---
 
 # Getting Started
 
-Get up and running in three steps: get an API key, download a binary, and configure your AI tool.
+## 1. Configure Google APIs
 
----
+In Google Cloud Console:
 
-## Step 1 -- Get a PageSpeed Insights API Key
+1. Create or select a project.
+2. Enable the PageSpeed Insights API.
+3. Create an API key.
+4. Enable the Chrome UX Report API if you need direct current or historical
+   CrUX tools.
+5. Restrict the key to the APIs it must call.
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
-2. Create or select a project
-3. Navigate to **APIs & Services → Library**
-4. Search for **PageSpeed Insights API** and enable it
-5. Navigate to **APIs & Services → Credentials**
-6. Click **Create Credentials → API Key**
-7. Copy the key
+No OAuth flow or billing account is required.
 
-!!! tip "Restrict your API key"
-    In Credentials, click on the key you just created and add an **API restriction** to the PageSpeed Insights API only. This limits blast radius if the key is ever exposed.
+## 2. Download a binary
 
-!!! note "The PSI API is free"
-    There is no billing required and no quota you're likely to hit during normal interactive use. Google's standard PageSpeed Insights quota is 25,000 requests per day per project.
+Download the appropriate Go or C# Native AOT binary from
+[GitHub Releases](https://github.com/ncosentino/google-psi-mcp/releases).
 
----
-
-## Step 2 -- Download a Binary
-
-Pre-built binaries are available for Linux, macOS, and Windows in both Go and C# implementations.
-
-| Platform | Go binary | C# binary |
-|----------|-----------|-----------|
-| Linux x64 | `psi-mcp-go-linux-amd64` | `psi-mcp-csharp-linux-x64` |
-| Linux ARM64 | `psi-mcp-go-linux-arm64` | `psi-mcp-csharp-linux-arm64` |
-| macOS x64 | `psi-mcp-go-darwin-amd64` | `psi-mcp-csharp-osx-x64` |
-| macOS ARM64 | `psi-mcp-go-darwin-arm64` | `psi-mcp-csharp-osx-arm64` |
-| Windows x64 | `psi-mcp-go-windows-amd64.exe` | `psi-mcp-csharp-win-x64.exe` |
-
-Download from [GitHub Releases](https://github.com/ncosentino/google-psi-mcp/releases). For most users, the Go binary is the better choice -- it's smaller (8-15 MB vs 20-40 MB) and starts faster.
-
-After downloading, make the binary executable on Linux/macOS:
+On Linux or macOS:
 
 ```bash
 chmod +x psi-mcp-go-linux-amd64
 ```
 
----
+## 3. Configure your MCP client
 
-## Step 3 -- Configure Your AI Tool
+```json
+{
+  "mcpServers": {
+    "pagespeed-insights": {
+      "type": "stdio",
+      "command": "/path/to/psi-mcp-go-linux-amd64",
+      "args": [],
+      "env": {
+        "GOOGLE_PSI_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
 
-Set the `GOOGLE_PSI_API_KEY` environment variable and point your AI tool at the binary.
+Restart the MCP client after changing its configuration.
 
-See [Setup by Tool](setup-by-tool/) for full configuration snippets for Claude Desktop, GitHub Copilot CLI, Cursor, Zed, and others.
+## 4. Test the installation
 
-!!! tip "Timeout settings"
-    The PSI API can take 10-20+ seconds per URL. If your MCP client supports a custom timeout, set it to at least **60 seconds**. Using `strategy="both"` on slow pages can approach that limit.
+```text
+Analyze https://www.devleader.ca on mobile and separate the real-user field
+data from the Lighthouse lab findings.
+```
 
+For CrUX:
+
+```text
+Get current phone CrUX data for the origin https://www.devleader.ca.
+```
+
+If the PSI call works but CrUX returns `PERMISSION_DENIED`, update the API
+enablement or key restrictions for the Chrome UX Report API.

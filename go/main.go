@@ -1,9 +1,10 @@
 // Command google-psi-mcp is an MCP server that exposes Google PageSpeed Insights
-// as tools for AI assistants. It communicates via STDIO using the MCP protocol.
+// as tools for AI assistants. It supports STDIO and Streamable HTTP transports.
 //
 // Usage:
 //
-//	google-psi-mcp [--api-key <key>]
+//	google-psi-mcp [--api-key <key>] [--transport stdio|http]
+//	    [--allowed-hosts <list>]
 //
 // API key resolution order: --api-key flag, GOOGLE_PSI_API_KEY env var, .env file.
 package main
@@ -11,20 +12,59 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
+	"strings"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/ncosentino/google-psi-mcp/go/internal/apihttp"
 	"github.com/ncosentino/google-psi-mcp/go/internal/config"
+	"github.com/ncosentino/google-psi-mcp/go/internal/crux"
 	"github.com/ncosentino/google-psi-mcp/go/internal/pagespeed"
 )
 
 var version = "dev"
 
+const (
+	maxBatchURLs          = 10
+	maxConcurrentAnalyses = 4
+)
+
+type pageAnalyzer interface {
+	Analyze(context.Context, pagespeed.AnalysisRequest) (*pagespeed.AnalysisResult, error)
+}
+
+type cruxQuerier interface {
+	QueryCurrent(context.Context, crux.QueryRequest) (*crux.Result, error)
+	QueryHistory(context.Context, crux.QueryRequest) (*crux.HistoryResult, error)
+}
+
+type analysisFailure struct {
+	InputURL  string `json:"inputUrl"`
+	Strategy  string `json:"strategy"`
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Retryable bool   `json:"retryable"`
+}
+
+type analysisResponse struct {
+	Results []*pagespeed.AnalysisResult `json:"results"`
+	Errors  []analysisFailure           `json:"errors"`
+}
+
 func main() {
-	apiKeyFlag := flag.String("api-key", "", "Google PageSpeed Insights API key")
+	apiKeyFlag := flag.String("api-key", "", "Google API key for PageSpeed Insights and CrUX")
+	transport := flag.String("transport", "stdio", "Transport mode: stdio or http")
+	allowedHosts := flag.String(
+		"allowed-hosts",
+		"localhost,127.0.0.1,[::1]",
+		"Comma-separated Host header allow-list for HTTP transport",
+	)
 	flag.Parse()
 
 	// All diagnostic output must go to stderr to avoid corrupting the MCP STDIO stream.
@@ -39,99 +79,287 @@ func main() {
 	}
 
 	client := pagespeed.NewClient(cfg.APIKey)
+	cruxClient := crux.NewClient(cfg.APIKey)
 
+	srv := newServer(client, cruxClient)
+
+	switch *transport {
+	case "stdio":
+		slog.Info("google-psi-mcp starting", "version", version, "transport", "stdio")
+		if err := srv.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+			slog.Error("server stopped with error", "err", err)
+			os.Exit(1)
+		}
+	case "http":
+		runHTTP(srv, splitAndTrim(*allowedHosts))
+	default:
+		slog.Error("invalid transport", "transport", *transport, "expected", "stdio or http")
+		os.Exit(1)
+	}
+}
+
+// newServer builds the MCP server independently of its transport.
+func newServer(client pageAnalyzer, cruxClient cruxQuerier) *mcp.Server {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "google-psi-mcp",
 		Version: version,
 	}, nil)
+	srv.AddReceivingMiddleware(coerceStringifiedArrayArgs(toolArrayFields))
 
 	mcp.AddTool(srv,
 		&mcp.Tool{
 			Name:        "analyze_page",
-			Description: "Analyze a single URL using Google PageSpeed Insights. Returns Core Web Vitals scores, category scores (performance, SEO, accessibility, best-practices), and actionable audit findings.",
+			Description: "Analyze a single URL using Google PageSpeed Insights. Separates real-user CrUX field data from synthetic Lighthouse lab data and returns Lighthouse 13 insights with structured details. strategy defaults to both. categories defaults to performance, SEO, accessibility, and best-practices; agentic-browsing is experimental and must be requested explicitly.",
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input analyzePageInput) (*mcp.CallToolResult, any, error) {
-			return analyzePages(ctx, client, []string{input.URL}, input.Strategy)
+			return analyzePages(ctx, client, []string{input.URL}, input.Strategy, input.Categories, input.Locale)
+		},
+	)
+
+	mcp.AddTool(srv,
+		&mcp.Tool{
+			Name:        "get_crux_data",
+			Description: "Get current Chrome UX Report real-user data for a URL or origin. Supports all current CrUX metrics, including Core Web Vitals, LCP subparts, navigation types, RTT, resource types, and form-factor fractions. Requires the Chrome UX Report API to be enabled and allowed for the configured API key.",
+		},
+		func(ctx context.Context, _ *mcp.CallToolRequest, input cruxDataInput) (*mcp.CallToolResult, any, error) {
+			request, err := crux.NewQueryRequest(
+				input.Target,
+				input.TargetType,
+				input.FormFactor,
+				input.Metrics,
+				0,
+			)
+			if err != nil {
+				return nil, nil, err
+			}
+			result, err := cruxClient.QueryCurrent(ctx, request)
+			if err != nil {
+				return nil, nil, err
+			}
+			return jsonToolResult(result)
+		},
+	)
+
+	mcp.AddTool(srv,
+		&mcp.Tool{
+			Name:        "get_crux_history",
+			Description: "Get up to 40 weekly Chrome UX Report collection periods for a URL or origin. Returns real-user metric timeseries with null values for unavailable periods. Requires the Chrome UX Report API to be enabled and allowed for the configured API key.",
+		},
+		func(ctx context.Context, _ *mcp.CallToolRequest, input cruxHistoryInput) (*mcp.CallToolResult, any, error) {
+			request, err := crux.NewQueryRequest(
+				input.Target,
+				input.TargetType,
+				input.FormFactor,
+				input.Metrics,
+				input.CollectionPeriodCount,
+			)
+			if err != nil {
+				return nil, nil, err
+			}
+			result, err := cruxClient.QueryHistory(ctx, request)
+			if err != nil {
+				return nil, nil, err
+			}
+			return jsonToolResult(result)
 		},
 	)
 
 	mcp.AddTool(srv,
 		&mcp.Tool{
 			Name:        "analyze_pages",
-			Description: "Analyze multiple URLs using Google PageSpeed Insights in a single call. Returns an array of results, one per URL.",
+			Description: "Analyze multiple URLs using Google PageSpeed Insights. Returns separate real-user field data and Lighthouse lab data for every URL and strategy. strategy defaults to both. categories defaults to performance, SEO, accessibility, and best-practices; agentic-browsing is experimental and must be requested explicitly.",
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input analyzePagesInput) (*mcp.CallToolResult, any, error) {
-			return analyzePages(ctx, client, input.URLs, input.Strategy)
+			return analyzePages(ctx, client, input.URLs, input.Strategy, input.Categories, input.Locale)
 		},
 	)
 
-	slog.Info("google-psi-mcp starting", "version", version, "transport", "stdio")
-	if err := srv.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		slog.Error("server stopped with error", "err", err)
-		os.Exit(1)
-	}
+	return srv
 }
 
 // analyzePageInput is the input schema for the analyze_page tool.
 type analyzePageInput struct {
-	URL      string `json:"url"`
-	Strategy string `json:"strategy"`
+	URL        string   `json:"url"`
+	Strategy   string   `json:"strategy,omitempty"`
+	Categories []string `json:"categories,omitempty"`
+	Locale     string   `json:"locale,omitempty"`
 }
 
 // analyzePagesInput is the input schema for the analyze_pages tool.
 type analyzePagesInput struct {
-	URLs     []string `json:"urls"`
-	Strategy string   `json:"strategy"`
+	URLs       []string `json:"urls"`
+	Strategy   string   `json:"strategy,omitempty"`
+	Categories []string `json:"categories,omitempty"`
+	Locale     string   `json:"locale,omitempty"`
+}
+
+// cruxDataInput is the input schema for current Chrome UX Report data.
+type cruxDataInput struct {
+	Target     string   `json:"target"`
+	TargetType string   `json:"target_type,omitempty"`
+	FormFactor string   `json:"form_factor,omitempty"`
+	Metrics    []string `json:"metrics,omitempty"`
+}
+
+// cruxHistoryInput is the input schema for historical Chrome UX Report data.
+type cruxHistoryInput struct {
+	Target                string   `json:"target"`
+	TargetType            string   `json:"target_type,omitempty"`
+	FormFactor            string   `json:"form_factor,omitempty"`
+	Metrics               []string `json:"metrics,omitempty"`
+	CollectionPeriodCount int      `json:"collection_period_count,omitempty"`
 }
 
 // analyzePages runs PSI analysis for the given URLs and strategy, returning a JSON tool result.
-func analyzePages(ctx context.Context, client *pagespeed.Client, urls []string, strategy string) (*mcp.CallToolResult, any, error) {
-	if strategy == "" {
-		strategy = "both"
+func analyzePages(
+	ctx context.Context,
+	client pageAnalyzer,
+	urls []string,
+	strategy string,
+	categories []string,
+	locale string,
+) (*mcp.CallToolResult, any, error) {
+	if len(urls) == 0 {
+		return nil, nil, fmt.Errorf("at least one URL is required")
+	}
+	if len(urls) > maxBatchURLs {
+		return nil, nil, fmt.Errorf("at most %d URLs may be analyzed per call", maxBatchURLs)
 	}
 
-	strategies := resolveStrategies(strategy)
-
-	type entry struct {
-		URL      string            `json:"url"`
-		Results  []*pagespeed.Result `json:"results"`
-		Error    string            `json:"error,omitempty"`
-	}
-
-	entries := make([]entry, 0, len(urls))
-
-	for _, u := range urls {
-		var results []*pagespeed.Result
-		var errMsg string
-
-		for _, s := range strategies {
-			r, err := client.Analyze(ctx, u, s)
-			if err != nil {
-				errMsg = fmt.Sprintf("error analyzing %s (%s): %v", u, s, err)
-				slog.Warn("PSI analysis failed", "url", u, "strategy", s, "err", err)
-				break
-			}
-			results = append(results, r)
-		}
-
-		entries = append(entries, entry{URL: u, Results: results, Error: errMsg})
-	}
-
-	b, err := json.Marshal(entries)
+	strategies, err := pagespeed.ResolveStrategies(strategy)
 	if err != nil {
-		return nil, nil, fmt.Errorf("marshalling results: %w", err)
+		return nil, nil, err
+	}
+
+	requests := make([]pagespeed.AnalysisRequest, 0, len(urls)*len(strategies))
+	for _, inputURL := range urls {
+		for _, selectedStrategy := range strategies {
+			request, err := pagespeed.NewAnalysisRequest(
+				inputURL,
+				selectedStrategy,
+				categories,
+				locale,
+			)
+			if err != nil {
+				return nil, nil, err
+			}
+			requests = append(requests, request)
+		}
+	}
+
+	type analysisEntry struct {
+		result  *pagespeed.AnalysisResult
+		failure *analysisFailure
+	}
+
+	entries := make([]analysisEntry, len(requests))
+	semaphore := make(chan struct{}, maxConcurrentAnalyses)
+	var waitGroup sync.WaitGroup
+	for index, request := range requests {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			select {
+			case semaphore <- struct{}{}:
+				defer func() { <-semaphore }()
+			case <-ctx.Done():
+				return
+			}
+
+			result, err := client.Analyze(ctx, request)
+			if err != nil {
+				slog.Warn(
+					"PSI analysis failed",
+					"url",
+					request.URL,
+					"strategy",
+					request.Strategy,
+					"err",
+					err,
+				)
+				failure := classifyAnalysisFailure(request, err)
+				entries[index].failure = &failure
+				return
+			}
+			entries[index].result = result
+		}()
+	}
+	waitGroup.Wait()
+
+	if ctx.Err() != nil {
+		return nil, nil, ctx.Err()
+	}
+
+	response := analysisResponse{
+		Results: make([]*pagespeed.AnalysisResult, 0, len(entries)),
+		Errors:  make([]analysisFailure, 0),
+	}
+	for _, entry := range entries {
+		if entry.result != nil {
+			response.Results = append(response.Results, entry.result)
+		}
+		if entry.failure != nil {
+			response.Errors = append(response.Errors, *entry.failure)
+		}
+	}
+
+	return jsonToolResult(response)
+}
+
+func classifyAnalysisFailure(
+	request pagespeed.AnalysisRequest,
+	err error,
+) analysisFailure {
+	failure := analysisFailure{
+		InputURL: request.URL,
+		Strategy: request.Strategy,
+		Code:     "request_failed",
+		Message:  err.Error(),
+	}
+
+	var statusError *apihttp.StatusError
+	if errors.As(err, &statusError) {
+		failure.Retryable = statusError.Retryable()
+		switch {
+		case statusError.StatusCode == 429:
+			failure.Code = "rate_limited"
+		case statusError.StatusCode >= 500:
+			failure.Code = "upstream_unavailable"
+		default:
+			failure.Code = "upstream_rejected"
+		}
+		return failure
+	}
+
+	var networkError net.Error
+	if errors.Is(err, context.DeadlineExceeded) ||
+		(errors.As(err, &networkError) && networkError.Timeout()) {
+		failure.Code = "timeout"
+		failure.Retryable = true
+	}
+	return failure
+}
+
+func jsonToolResult(value any) (*mcp.CallToolResult, any, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshalling tool result: %w", err)
 	}
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: string(b)},
+			&mcp.TextContent{Text: string(encoded)},
 		},
 	}, nil, nil
 }
 
-func resolveStrategies(strategy string) []string {
-	if strategy == "both" {
-		return []string{"mobile", "desktop"}
+func splitAndTrim(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			result = append(result, part)
+		}
 	}
-	return []string{strategy}
+	return result
 }

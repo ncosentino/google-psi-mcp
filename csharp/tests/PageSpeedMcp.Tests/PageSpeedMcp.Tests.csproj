@@ -17,4 +17,9 @@
     </PackageReference>
     <ProjectReference Include="..\..\src\PageSpeedMcp\PageSpeedMcp.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\testdata\*.json"
+          Link="testdata\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

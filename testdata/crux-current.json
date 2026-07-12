@@ -1,0 +1,54 @@
+{
+  "record": {
+    "key": {
+      "url": "https://example.test/page",
+      "formFactor": "PHONE"
+    },
+    "metrics": {
+      "largest_contentful_paint": {
+        "histogram": [
+          { "start": 0, "end": 2500, "density": 0.58 },
+          { "start": 2500, "end": 4000, "density": 0.30 },
+          { "start": 4000, "density": 0.12 }
+        ],
+        "percentiles": {
+          "p75": 3100
+        }
+      },
+      "cumulative_layout_shift": {
+        "histogram": [
+          { "start": "0.00", "end": "0.10", "density": 0.88 },
+          { "start": "0.10", "end": "0.25", "density": 0.09 },
+          { "start": "0.25", "density": 0.03 }
+        ],
+        "percentiles": {
+          "p75": "0.08"
+        }
+      },
+      "navigation_types": {
+        "fractions": {
+          "navigate": 0.62,
+          "navigate_cache": 0.08,
+          "reload": 0.10,
+          "back_forward": 0.05,
+          "back_forward_cache": 0.15
+        }
+      },
+      "largest_contentful_paint_resource_type": {
+        "fractions": {
+          "image": 0.72,
+          "text": 0.25,
+          "video": 0.03
+        }
+      }
+    },
+    "collectionPeriod": {
+      "firstDate": { "year": 2026, "month": 6, "day": 13 },
+      "lastDate": { "year": 2026, "month": 7, "day": 10 }
+    }
+  },
+  "urlNormalizationDetails": {
+    "originalUrl": "https://example.test/page/",
+    "normalizedUrl": "https://example.test/page"
+  }
+}

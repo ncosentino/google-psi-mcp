@@ -1,39 +1,19 @@
 ---
-description: Compare the Go and C# implementations of the Google PageSpeed Insights MCP server. Both expose identical tools -- choose based on binary size and ecosystem preference.
+description: Compare the parity-tested Go and C# Native AOT implementations.
 ---
 
 # Go vs C#
 
-Both implementations expose identical MCP tools with identical behavior. Choose based on your environment.
+Both implementations expose the same four tools, validation rules, output
+contract, retry policy, batch limits, and transports.
 
----
-
-## Comparison
-
-| Aspect | Go | C# Native AOT |
-|--------|----|---------------|
-| Binary size | ~8-15 MB | ~20-40 MB |
-| Startup time | ~10-50ms | ~50-100ms |
+| Aspect | Go | C# |
+|---|---|---|
+| Runtime | Native Go binary | .NET Native AOT |
+| MCP SDK | `go-sdk` 1.6.1 | `ModelContextProtocol` 1.4.1 |
+| Transport | STDIO and Streamable HTTP | STDIO and Streamable HTTP |
+| HTTP mode | Stateless | Stateless |
 | Runtime dependency | None | None |
-| Language | Go 1.26 | C# / .NET 10 |
-| MCP SDK | Official `go-sdk` | Official `ModelContextProtocol` |
-| Cross-platform | Yes | Yes |
 
-Both are compiled to native binaries with no external runtime dependency. Neither requires Go, .NET, Node.js, or Python to be installed.
-
----
-
-## Which Should I Choose?
-
-**Choose Go if:**
-- You want the smallest binary (8-15 MB vs 20-40 MB)
-- You want fastest startup (useful if your AI tool spawns a new process per session)
-- You have no preference for a specific ecosystem
-
-**Choose C# if:**
-- You're already in a .NET ecosystem and prefer C# tooling
-- You want to contribute to the codebase and prefer C#
-- You're evaluating Native AOT C# for your own projects
-
-Both implementations pass the same tests and produce the same responses. The choice is purely a matter of preference and operational context.
-
+Choose based on deployment and contribution preferences. The test suites consume
+the same sanitized PSI 13.4 and CrUX fixtures to prevent response-contract drift.

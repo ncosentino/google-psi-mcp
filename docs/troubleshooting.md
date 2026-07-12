@@ -1,61 +1,53 @@
 ---
-description: Fix timeouts and API key errors with the Google PageSpeed Insights MCP server. Includes per-scenario timeout risk table and mitigation strategies.
+description: Diagnose PSI timeouts, CrUX permissions, HTTP host filtering, and MCP argument errors.
 ---
 
 # Troubleshooting
 
-## Timeouts
+## PSI analysis is slow
 
-The most common problem with this MCP server is timeouts. The PageSpeed Insights API is a real Lighthouse analysis -- it actually loads your page in a headless browser and runs performance audits. That takes time.
+PSI loads the page in Chrome and runs Lighthouse. A request can take tens of
+seconds. The server allows 120 seconds per PSI request, retries transient
+failures, and runs at most four batch requests concurrently.
 
-### Why timeouts happen
+For interactive use, prefer a single strategy when both mobile and desktop are
+not required. Successful batch results are preserved even when another URL
+fails.
 
-- The PSI API takes **5-20+ seconds per URL per strategy**, depending on the page's complexity and Google's infrastructure load
-- `strategy="both"` makes **two sequential API calls** (mobile then desktop) -- that's 10-40+ seconds for a single URL
-- `analyze_pages` multiplies this: N URLs × S strategies = N×S sequential calls
-- Most MCP clients (Claude Desktop, GitHub Copilot CLI) have a **30-60 second timeout** for tool calls
+## CrUX returns PERMISSION_DENIED
 
-### How to avoid timeouts
+The direct CrUX tools use `chromeuxreport.googleapis.com`, not the PageSpeed
+Insights API.
 
-**Use a single strategy for interactive analysis:**
+Confirm:
 
-Instead of `strategy="both"`, use `strategy="mobile"` (the default) or `strategy="desktop"`. You get results faster, and you can always run the other strategy separately if needed.
+1. The Chrome UX Report API is enabled in the key's project.
+2. The key's API restrictions allow the Chrome UX Report API.
+3. The target has enough eligible Chrome traffic for CrUX data.
 
-**Reduce batch size:**
+## A metric is absent
 
-With `analyze_pages`, stick to 2-3 URLs per call. For larger audits, call `analyze_page` on each URL individually so a single timeout doesn't lose all results.
+CrUX only returns metrics that meet its privacy and eligibility thresholds.
+Absent data is not converted to zero. Historical `"NaN"` and `null` values are
+returned as JSON `null`.
 
-**If your client supports timeout configuration:**
+## HTTP requests return 403
 
-Set the MCP tool timeout to at least **90 seconds** to give PSI room to respond even on slow pages.
+For Go, add the request host to `--allowed-hosts`. For C#, configure ASP.NET
+Core `AllowedHosts`.
 
-### Which calls are most at risk
+Cross-site browser requests are intentionally rejected. HTTP transport should
+normally be accessed by an MCP client or reverse proxy, not arbitrary browser
+JavaScript.
 
-| Scenario | Estimated call time | Risk level |
-|----------|-------------------|------------|
-| `analyze_page`, `strategy="mobile"` | 5-20s | Low |
-| `analyze_page`, `strategy="desktop"` | 5-20s | Low |
-| `analyze_page`, `strategy="both"` | 10-40s | Medium-High |
-| `analyze_pages` (2 URLs, mobile) | 10-40s | Medium |
-| `analyze_pages` (3+ URLs, `both`) | 30-120s | **Very High** |
+## Array parameter validation fails
 
-### The request didn't time out but returned no data
+The server repairs known MCP clients that encode array parameters as JSON
+strings. If validation still fails, confirm that the decoded value is actually
+an array and that values such as category, strategy, form factor, and metric
+names are valid.
 
-If the API key is invalid or not authorized for the PageSpeed Insights API, the server returns an error immediately. Confirm:
+## API key errors
 
-1. The `GOOGLE_PSI_API_KEY` environment variable is set and non-empty
-2. The PageSpeed Insights API is enabled in your Google Cloud project (not just created)
-3. The key is not restricted to a different API
-
----
-
-## API Key Issues
-
-**Error at startup: "API key is required"**
-
-The server couldn't find a key in any of the three sources (CLI argument, environment variable, `.env` file). Verify the variable name is exactly `GOOGLE_PSI_API_KEY` -- it's case-sensitive.
-
-**"API key not valid" error from Google**
-
-The key exists but the PageSpeed Insights API isn't enabled for the project that owns it. Go to Google Cloud Console → APIs & Services → Library and enable the PageSpeed Insights API.
-
+The key is resolved from `--api-key`, `GOOGLE_PSI_API_KEY`, or `.env`, in that
+order. The server exits at startup when no key is available.

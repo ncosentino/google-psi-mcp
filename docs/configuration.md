@@ -1,44 +1,63 @@
 ---
-description: Configure the GOOGLE_PSI_API_KEY for the PageSpeed Insights MCP server via environment variable, CLI argument, or .env file. Includes resolution order and quota notes.
+description: Configure API access, STDIO or HTTP transport, ports, and allowed hosts.
 ---
 
 # Configuration
 
-The server needs a single credential: a Google PageSpeed Insights API key. It can be provided in three ways.
+## API key
 
----
+The server resolves one Google API key in this order:
 
-## Credential
+1. `--api-key`
+2. `GOOGLE_PSI_API_KEY`
+3. `GOOGLE_PSI_API_KEY` in a `.env` file in the working directory
 
-### `GOOGLE_PSI_API_KEY`
+The PageSpeed Insights API must be enabled. The direct CrUX tools additionally
+require the Chrome UX Report API.
 
-Your PageSpeed Insights API key from the Google Cloud Console.
+When API restrictions are enabled on the key, allow both APIs if both tool
+families will be used. A PageSpeed-only restriction causes `get_crux_data` and
+`get_crux_history` to return `PERMISSION_DENIED`.
 
-| Method | Example |
-|--------|---------|
-| Environment variable | `GOOGLE_PSI_API_KEY=AIzaXXX` |
-| CLI argument | `--api-key AIzaXXX` |
-| `.env` file | `GOOGLE_PSI_API_KEY=AIzaXXX` |
+## STDIO transport
 
----
+STDIO is the default:
 
-## Resolution Order
+```bash
+./psi-mcp-go-linux-amd64 --api-key YOUR_KEY
+```
 
-The server resolves the API key using this priority (highest to lowest):
+Explicit form:
 
-1. **CLI argument** (`--api-key`)
-2. **Environment variable** (`GOOGLE_PSI_API_KEY` in process env or tool config `env` block)
-3. **`.env` file** in the working directory
+```bash
+./psi-mcp-go-linux-amd64 --transport stdio --api-key YOUR_KEY
+```
 
-The first source that provides a non-empty value is used. If none are present, the server exits with an error at startup.
+## HTTP transport
 
----
+```bash
+PORT=8080 ./psi-mcp-go-linux-amd64 \
+  --transport http \
+  --allowed-hosts localhost,127.0.0.1
+```
 
-## No Additional Configuration
+Both implementations read the listen port from `PORT`, defaulting to `8080`.
 
-Unlike OAuth2-based servers, there is no token refresh, no service account JSON, and no billing account to configure. The PSI API key is the only credential.
+Go uses the comma-separated `--allowed-hosts` option. C# uses standard ASP.NET
+Core `AllowedHosts` configuration, whose default is:
 
-- **Free quota**: 25,000 requests per day per Google Cloud project -- far more than any interactive use requires.
-- **Billing**: Not required. Enable the API on a free-tier project and it works.
-- **Restricting the key**: In Google Cloud Console → Credentials, restrict the key to the PageSpeed Insights API only to limit exposure.
+```text
+localhost;127.0.0.1;[::1]
+```
 
+The HTTP transport is stateless and includes host and cross-origin protections.
+It does not authenticate callers. Use an authenticated reverse proxy or private
+network for any non-local deployment.
+
+## Analysis limits
+
+- Maximum URLs per `analyze_pages` call: 10
+- Maximum concurrent PSI requests: 4
+- Transient attempts: 3
+- PSI HTTP timeout: 120 seconds
+- CrUX HTTP timeout: 30 seconds

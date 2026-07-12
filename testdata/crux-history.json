@@ -1,0 +1,51 @@
+{
+  "record": {
+    "key": {
+      "origin": "https://example.test",
+      "formFactor": "DESKTOP"
+    },
+    "metrics": {
+      "largest_contentful_paint": {
+        "histogramTimeseries": [
+          { "start": 0, "end": 2500, "densities": [0.56, "NaN", 0.62] },
+          { "start": 2500, "end": 4000, "densities": [0.31, "NaN", 0.28] },
+          { "start": 4000, "densities": [0.13, "NaN", 0.10] }
+        ],
+        "percentilesTimeseries": {
+          "p75s": [3200, null, 2900]
+        }
+      },
+      "cumulative_layout_shift": {
+        "histogramTimeseries": [
+          { "start": "0.00", "end": "0.10", "densities": [0.84, "NaN", 0.89] },
+          { "start": "0.10", "end": "0.25", "densities": [0.11, "NaN", 0.08] },
+          { "start": "0.25", "densities": [0.05, "NaN", 0.03] }
+        ],
+        "percentilesTimeseries": {
+          "p75s": ["0.09", null, "0.07"]
+        }
+      },
+      "navigation_types": {
+        "fractionTimeseries": {
+          "navigate": { "fractions": [0.64, "NaN", 0.66] },
+          "reload": { "fractions": [0.11, "NaN", 0.09] },
+          "back_forward_cache": { "fractions": [0.15, "NaN", 0.18] }
+        }
+      }
+    },
+    "collectionPeriods": [
+      {
+        "firstDate": { "year": 2026, "month": 5, "day": 24 },
+        "lastDate": { "year": 2026, "month": 6, "day": 20 }
+      },
+      {
+        "firstDate": { "year": 2026, "month": 5, "day": 31 },
+        "lastDate": { "year": 2026, "month": 6, "day": 27 }
+      },
+      {
+        "firstDate": { "year": 2026, "month": 6, "day": 7 },
+        "lastDate": { "year": 2026, "month": 7, "day": 4 }
+      }
+    ]
+  }
+}

@@ -9,41 +9,152 @@ namespace PageSpeedMcp.Tools;
 [McpServerToolType]
 internal sealed class PageSpeedTool(PageSpeedClient client)
 {
+    private const int MaxBatchUrls = 10;
+    private const int MaxConcurrentAnalyses = 4;
+
     [McpServerTool(Name = "analyze_page")]
-    [Description("Analyze a single URL using Google PageSpeed Insights. Returns Core Web Vitals (FCP, LCP, CLS, TBT, TTFB), category scores (performance, SEO, accessibility, best-practices), and actionable audit findings.")]
+    [Description("Analyze a single URL using Google PageSpeed Insights. Separates real-user CrUX field data from synthetic Lighthouse lab data and returns Lighthouse 13 insights with structured details. Agentic browsing is experimental and must be requested explicitly.")]
     internal async Task<string> AnalyzePage(
         [Description("The URL to analyze.")] string url,
         [Description("Analysis strategy: mobile, desktop, or both. Defaults to both.")] string strategy = "both",
+        [Description("Lighthouse categories to run. Defaults to performance, seo, accessibility, and best-practices. agentic-browsing is experimental and opt-in.")] string[]? categories = null,
+        [Description("Optional locale for Lighthouse display strings, such as en-US or fr.")] string? locale = null,
         CancellationToken cancellationToken = default)
     {
-        var results = await RunAnalysisAsync([url], strategy, cancellationToken).ConfigureAwait(false);
-        return JsonSerializer.Serialize(results, PsiJsonContext.Default.PageSpeedResultArray);
+        var response = await RunAnalysisAsync(
+            [url],
+            strategy,
+            categories,
+            locale,
+            cancellationToken).ConfigureAwait(false);
+        return JsonSerializer.Serialize(response, PsiJsonContext.Default.AnalysisResponse);
     }
 
     [McpServerTool(Name = "analyze_pages")]
-    [Description("Analyze multiple URLs using Google PageSpeed Insights in a single call. Returns an array of results, one per URL.")]
+    [Description("Analyze multiple URLs using Google PageSpeed Insights. Returns separate real-user field data and Lighthouse lab data for every URL and strategy. Agentic browsing is experimental and must be requested explicitly.")]
     internal async Task<string> AnalyzePages(
         [Description("Array of URLs to analyze.")] string[] urls,
         [Description("Analysis strategy: mobile, desktop, or both. Defaults to both.")] string strategy = "both",
+        [Description("Lighthouse categories to run. Defaults to performance, seo, accessibility, and best-practices. agentic-browsing is experimental and opt-in.")] string[]? categories = null,
+        [Description("Optional locale for Lighthouse display strings, such as en-US or fr.")] string? locale = null,
         CancellationToken cancellationToken = default)
     {
-        var results = await RunAnalysisAsync(urls, strategy, cancellationToken).ConfigureAwait(false);
-        return JsonSerializer.Serialize(results, PsiJsonContext.Default.PageSpeedResultArray);
+        var response = await RunAnalysisAsync(
+            urls,
+            strategy,
+            categories,
+            locale,
+            cancellationToken).ConfigureAwait(false);
+        return JsonSerializer.Serialize(response, PsiJsonContext.Default.AnalysisResponse);
     }
 
-    private async Task<PageSpeedResult[]> RunAnalysisAsync(
+    private async Task<AnalysisResponse> RunAnalysisAsync(
         string[] urls,
         string strategy,
+        string[]? categories,
+        string? locale,
         CancellationToken cancellationToken)
     {
-        string[] strategies = strategy.Equals("both", StringComparison.OrdinalIgnoreCase)
-            ? ["mobile", "desktop"]
-            : [strategy.ToLowerInvariant()];
+        if (urls.Length == 0)
+        {
+            throw new ArgumentException("At least one URL is required.", nameof(urls));
+        }
+        if (urls.Length > MaxBatchUrls)
+        {
+            throw new ArgumentException(
+                $"At most {MaxBatchUrls} URLs may be analyzed per call.",
+                nameof(urls));
+        }
 
-        var tasks = urls
-            .SelectMany(u => strategies.Select(s => client.AnalyzeAsync(u, s, cancellationToken)))
+        var strategies = PageSpeedAnalysisRequest.ResolveStrategies(strategy);
+        var requests = urls
+            .SelectMany(url => strategies.Select(
+                selectedStrategy => PageSpeedAnalysisRequest.Create(
+                    url,
+                    selectedStrategy,
+                    categories,
+                    locale)))
             .ToArray();
 
-        return await Task.WhenAll(tasks).ConfigureAwait(false);
+        using var semaphore = new SemaphoreSlim(MaxConcurrentAnalyses);
+        var tasks = requests
+            .Select(request => RunSingleAnalysisAsync(request, semaphore, cancellationToken))
+            .ToArray();
+
+        var entries = await Task.WhenAll(tasks).ConfigureAwait(false);
+        return new AnalysisResponse(
+            entries.Where(entry => entry.Result is not null).Select(entry => entry.Result!).ToArray(),
+            entries.Where(entry => entry.Error is not null).Select(entry => entry.Error!).ToArray());
     }
+
+    private async Task<AnalysisEntry> RunSingleAnalysisAsync(
+        PageSpeedAnalysisRequest request,
+        SemaphoreSlim semaphore,
+        CancellationToken cancellationToken)
+    {
+        await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return new AnalysisEntry(
+                await client.AnalyzeAsync(request, cancellationToken).ConfigureAwait(false),
+                null);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new AnalysisEntry(
+                null,
+                new AnalysisFailure(
+                    request.Url,
+                    request.Strategy,
+                    "timeout",
+                    "The PageSpeed Insights request timed out.",
+                    Retryable: true));
+        }
+        catch (HttpRequestException ex)
+        {
+            return new AnalysisEntry(
+                null,
+                ClassifyHttpFailure(request, ex));
+        }
+        catch (JsonException ex)
+        {
+            return new AnalysisEntry(
+                null,
+                new AnalysisFailure(
+                    request.Url,
+                    request.Strategy,
+                    "invalid_response",
+                    $"The PageSpeed Insights response was invalid: {ex.Message}",
+                    Retryable: false));
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+    }
+
+    private static AnalysisFailure ClassifyHttpFailure(
+        PageSpeedAnalysisRequest request,
+        HttpRequestException exception)
+    {
+        int? statusCode = exception.StatusCode is null
+            ? null
+            : (int)exception.StatusCode.Value;
+        var retryable = statusCode is 429 or >= 500;
+        var code = statusCode switch
+        {
+            429 => "rate_limited",
+            >= 500 => "upstream_unavailable",
+            not null => "upstream_rejected",
+            _ => "request_failed",
+        };
+        return new AnalysisFailure(
+            request.Url,
+            request.Strategy,
+            code,
+            exception.Message,
+            retryable);
+    }
+
+    private sealed record AnalysisEntry(PageSpeedAnalysis? Result, AnalysisFailure? Error);
 }
