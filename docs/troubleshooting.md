@@ -40,6 +40,26 @@ Cross-site browser requests are intentionally rejected. HTTP transport should
 normally be accessed by an MCP client or reverse proxy, not arbitrary browser
 JavaScript.
 
+## HTTP client receives 404
+
+Use the Streamable HTTP endpoint:
+
+```text
+http://127.0.0.1:8080/mcp
+```
+
+The server root is not an MCP endpoint. Check service availability separately:
+
+```text
+http://127.0.0.1:8080/health
+```
+
+## Another HTTP service instance will not start
+
+Only one process can bind the configured address and port. Check `/health` or
+use `scripts/manage-mcp-service.ps1 Status` before launching another instance.
+The manager reuses a healthy process instead of spawning a duplicate.
+
 ## Array parameter validation fails
 
 The server repairs known MCP clients that encode array parameters as JSON

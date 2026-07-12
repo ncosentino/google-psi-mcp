@@ -44,11 +44,15 @@ dotnet publish src/PageSpeedMcp/PageSpeedMcp.csproj \
 
 ```bash
 cd go
-PORT=8080 go run . --transport http --api-key YOUR_KEY
+go run . --transport http --listen-address 127.0.0.1 --port 8080 \
+  --api-key YOUR_KEY
 ```
 
 ```bash
 cd csharp
-PORT=8080 dotnet run --project src/PageSpeedMcp -- \
-  --transport http --api-key YOUR_KEY
+dotnet run --project src/PageSpeedMcp -- \
+  --transport http --listen-address 127.0.0.1 --port 8080 \
+  --api-key YOUR_KEY
 ```
+
+Both commands expose MCP at `/mcp` and health metadata at `/health`.
