@@ -44,6 +44,7 @@ nav:
     - get_crux_history: tools/crux-history.md
   - Setup by Tool: setup-by-tool.md
   - Configuration: configuration.md
+  - Shared Service: shared-service.md
   - Troubleshooting: troubleshooting.md
   - Go vs C#: implementations.md
   - Building from Source: building.md

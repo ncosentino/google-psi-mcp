@@ -1,16 +1,18 @@
 ﻿using System.ComponentModel;
 using System.Text.Json;
 using ModelContextProtocol.Server;
+using PageSpeedMcp.Infrastructure;
 using PageSpeedMcp.PageSpeed;
 
 namespace PageSpeedMcp.Tools;
 
 /// <summary>MCP tools for Google PageSpeed Insights analysis.</summary>
 [McpServerToolType]
-internal sealed class PageSpeedTool(PageSpeedClient client)
+internal sealed class PageSpeedTool(
+    PageSpeedClient client,
+    PageSpeedRequestLimiter requestLimiter)
 {
     private const int MaxBatchUrls = 10;
-    private const int MaxConcurrentAnalyses = 4;
 
     [McpServerTool(Name = "analyze_page")]
     [Description("Analyze a single URL using Google PageSpeed Insights. Separates real-user CrUX field data from synthetic Lighthouse lab data and returns Lighthouse 13 insights with structured details. Agentic browsing is experimental and must be requested explicitly.")]
@@ -76,9 +78,8 @@ internal sealed class PageSpeedTool(PageSpeedClient client)
                     locale)))
             .ToArray();
 
-        using var semaphore = new SemaphoreSlim(MaxConcurrentAnalyses);
         var tasks = requests
-            .Select(request => RunSingleAnalysisAsync(request, semaphore, cancellationToken))
+            .Select(request => RunSingleAnalysisAsync(request, cancellationToken))
             .ToArray();
 
         var entries = await Task.WhenAll(tasks).ConfigureAwait(false);
@@ -89,14 +90,14 @@ internal sealed class PageSpeedTool(PageSpeedClient client)
 
     private async Task<AnalysisEntry> RunSingleAnalysisAsync(
         PageSpeedAnalysisRequest request,
-        SemaphoreSlim semaphore,
         CancellationToken cancellationToken)
     {
-        await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             return new AnalysisEntry(
-                await client.AnalyzeAsync(request, cancellationToken).ConfigureAwait(false),
+                await requestLimiter.RunAsync(
+                    token => client.AnalyzeAsync(request, token),
+                    cancellationToken).ConfigureAwait(false),
                 null);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -126,10 +127,6 @@ internal sealed class PageSpeedTool(PageSpeedClient client)
                     "invalid_response",
                     $"The PageSpeed Insights response was invalid: {ex.Message}",
                     Retryable: false));
-        }
-        finally
-        {
-            semaphore.Release();
         }
     }
 

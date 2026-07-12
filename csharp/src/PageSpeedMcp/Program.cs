@@ -1,10 +1,26 @@
-using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using ModelContextProtocol.Server;
 using PageSpeedMcp;
 using PageSpeedMcp.Config;
 using PageSpeedMcp.Tools;
+
+if (ServerOptions.IsHelpRequested(args))
+{
+    await Console.Out.WriteLineAsync(ServerOptions.Usage).ConfigureAwait(false);
+    return 0;
+}
+
+ServerOptions options;
+try
+{
+    options = ServerOptions.Parse(args);
+}
+catch (ArgumentException exception)
+{
+    await Console.Error.WriteLineAsync($"ERROR: {exception.Message}").ConfigureAwait(false);
+    return 1;
+}
 
 var apiKey = ApiKeyResolver.Resolve(
     args.SkipWhile(argument => argument != "--api-key").Skip(1).FirstOrDefault());
@@ -17,29 +33,16 @@ if (string.IsNullOrWhiteSpace(apiKey))
     return 1;
 }
 
-var transport = args
-    .SkipWhile(argument => argument != "--transport")
-    .Skip(1)
-    .FirstOrDefault() ?? "stdio";
-
-if (transport == "http")
+if (options.Transport == "http")
 {
-    var portValue = Environment.GetEnvironmentVariable("PORT") is { Length: > 0 } configuredPort
-        ? configuredPort
-        : "8080";
     var app = Hosting.BuildHttpHost(
         args,
         apiKey,
-        int.Parse(portValue, CultureInfo.InvariantCulture));
+        options.Port,
+        options.ListenAddress,
+        options.ShutdownToken);
     await app.RunAsync().ConfigureAwait(false);
     return 0;
-}
-if (transport != "stdio")
-{
-    await Console.Error.WriteLineAsync(
-        $"ERROR: Invalid transport \"{transport}\". Expected stdio or http.")
-        .ConfigureAwait(false);
-    return 1;
 }
 
 var builder = Host.CreateApplicationBuilder(args);

@@ -4,6 +4,7 @@
 // Usage:
 //
 //	google-psi-mcp [--api-key <key>] [--transport stdio|http]
+//	    [--listen-address <address>] [--port <port>]
 //	    [--allowed-hosts <list>]
 //
 // API key resolution order: --api-key flag, GOOGLE_PSI_API_KEY env var, .env file.
@@ -18,8 +19,10 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/ncosentino/google-psi-mcp/go/internal/apihttp"
@@ -60,6 +63,12 @@ type analysisResponse struct {
 func main() {
 	apiKeyFlag := flag.String("api-key", "", "Google API key for PageSpeed Insights and CrUX")
 	transport := flag.String("transport", "stdio", "Transport mode: stdio or http")
+	listenAddress := flag.String(
+		"listen-address",
+		"",
+		"HTTP listen address (default MCP_LISTEN_ADDRESS or 127.0.0.1)",
+	)
+	port := flag.Int("port", 0, "HTTP listen port (default PORT or 8080)")
 	allowedHosts := flag.String(
 		"allowed-hosts",
 		"localhost,127.0.0.1,[::1]",
@@ -91,7 +100,26 @@ func main() {
 			os.Exit(1)
 		}
 	case "http":
-		runHTTP(srv, splitAndTrim(*allowedHosts))
+		httpPort, err := resolveHTTPPort(*port)
+		if err != nil {
+			slog.Error("invalid HTTP port", "err", err)
+			os.Exit(1)
+		}
+		ctx, stop := signal.NotifyContext(
+			context.Background(),
+			os.Interrupt,
+			syscall.SIGTERM,
+		)
+		defer stop()
+		if err := runHTTP(ctx, srv, httpServerOptions{
+			ListenAddress: resolveHTTPListenAddress(*listenAddress),
+			Port:          httpPort,
+			AllowedHosts:  splitAndTrim(*allowedHosts),
+			ShutdownToken: strings.TrimSpace(os.Getenv("MCP_SHUTDOWN_TOKEN")),
+		}); err != nil {
+			slog.Error("server stopped with error", "err", err)
+			os.Exit(1)
+		}
 	default:
 		slog.Error("invalid transport", "transport", *transport, "expected", "stdio or http")
 		os.Exit(1)
@@ -100,6 +128,7 @@ func main() {
 
 // newServer builds the MCP server independently of its transport.
 func newServer(client pageAnalyzer, cruxClient cruxQuerier) *mcp.Server {
+	client = newLimitedPageAnalyzer(client, maxConcurrentAnalyses)
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "google-psi-mcp",
 		Version: version,
@@ -253,19 +282,11 @@ func analyzePages(
 	}
 
 	entries := make([]analysisEntry, len(requests))
-	semaphore := make(chan struct{}, maxConcurrentAnalyses)
 	var waitGroup sync.WaitGroup
 	for index, request := range requests {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			select {
-			case semaphore <- struct{}{}:
-				defer func() { <-semaphore }()
-			case <-ctx.Done():
-				return
-			}
-
 			result, err := client.Analyze(ctx, request)
 			if err != nil {
 				slog.Warn(

@@ -143,8 +143,10 @@ See [Configuration](configuration.md) for the full resolution order.
 Start either binary with HTTP transport:
 
 ```bash
-PORT=8080 ./psi-mcp-go-linux-amd64 \
+./psi-mcp-go-linux-amd64 \
   --transport http \
+  --listen-address 127.0.0.1 \
+  --port 8080 \
   --allowed-hosts localhost,127.0.0.1 \
   --api-key your-api-key
 ```
@@ -156,11 +158,15 @@ Configure an HTTP-capable MCP client with:
   "mcpServers": {
     "pagespeed-insights": {
       "type": "http",
-      "url": "http://127.0.0.1:8080"
+      "url": "http://127.0.0.1:8080/mcp",
+      "tools": ["*"]
     }
   }
 }
 ```
 
-The transport is stateless but does not authenticate callers. Use it locally,
-on a private network, or behind an authenticated reverse proxy.
+All agent sessions can share this one process. See
+[Running One Shared Service](shared-service.md) for lifecycle management.
+
+The transport is stateless but does not authenticate callers. Keep it on
+loopback, a private network, or behind an authenticated reverse proxy.

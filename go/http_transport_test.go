@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -61,7 +64,7 @@ func TestHTTPTransport_ServesRealSession(t *testing.T) {
 	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "test"}, nil)
 	session, err := client.Connect(
 		ctx,
-		&mcp.StreamableClientTransport{Endpoint: httpServer.URL},
+		&mcp.StreamableClientTransport{Endpoint: httpServer.URL + mcpPath},
 		nil,
 	)
 	if err != nil {
@@ -92,6 +95,40 @@ func TestHTTPTransport_ServesRealSession(t *testing.T) {
 	}
 }
 
+func TestHTTPTransport_ServesHealth(t *testing.T) {
+	t.Parallel()
+
+	srv := newServer(&trackingAnalyzer{}, fakeCruxQuerier{})
+	httpServer := httptest.NewServer(buildHTTPHandler(srv, []string{"127.0.0.1"}))
+	defer httpServer.Close()
+
+	request, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		httpServer.URL+healthPath,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewRequestWithContext: %v", err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("GET health: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", response.StatusCode)
+	}
+	var health healthResponse
+	if err := json.NewDecoder(response.Body).Decode(&health); err != nil {
+		t.Fatalf("decode health: %v", err)
+	}
+	if health.Status != "ok" || health.Service != "google-psi-mcp" {
+		t.Errorf("health = %+v", health)
+	}
+}
+
 func TestHTTPTransport_RejectsForgedCrossSiteOrigin(t *testing.T) {
 	t.Parallel()
 
@@ -102,7 +139,7 @@ func TestHTTPTransport_RejectsForgedCrossSiteOrigin(t *testing.T) {
 	request, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
-		httpServer.URL,
+		httpServer.URL+mcpPath,
 		nil,
 	)
 	if err != nil {
@@ -122,15 +159,216 @@ func TestHTTPTransport_RejectsForgedCrossSiteOrigin(t *testing.T) {
 	}
 }
 
+func TestHTTPTransport_SharesConcurrencyLimitAcrossClients(t *testing.T) {
+	t.Parallel()
+
+	analyzer := &trackingAnalyzer{}
+	srv := newServer(analyzer, fakeCruxQuerier{})
+	httpServer := httptest.NewServer(buildHTTPHandler(srv, []string{"127.0.0.1"}))
+	defer httpServer.Close()
+
+	const clientCount = 8
+	sessions := make([]*mcp.ClientSession, 0, clientCount)
+	for range clientCount {
+		client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "test"}, nil)
+		session, err := client.Connect(
+			context.Background(),
+			&mcp.StreamableClientTransport{Endpoint: httpServer.URL + mcpPath},
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("Connect: %v", err)
+		}
+		defer session.Close()
+		sessions = append(sessions, session)
+	}
+
+	start := make(chan struct{})
+	var waitGroup sync.WaitGroup
+	for index, session := range sessions {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			<-start
+			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+				Name: "analyze_page",
+				Arguments: map[string]any{
+					"url":      "https://example.test/" + strconv.Itoa(index),
+					"strategy": "mobile",
+				},
+			})
+			if err != nil {
+				t.Errorf("CallTool: %v", err)
+				return
+			}
+			if result.IsError {
+				t.Errorf("CallTool returned error content: %+v", result.Content)
+			}
+		}()
+	}
+	close(start)
+	waitGroup.Wait()
+
+	if max := analyzer.maxActive.Load(); max > maxConcurrentAnalyses {
+		t.Errorf("max concurrency = %d, want at most %d", max, maxConcurrentAnalyses)
+	}
+	if max := analyzer.maxActive.Load(); max < 2 {
+		t.Errorf("max concurrency = %d, expected concurrent execution", max)
+	}
+}
+
+func TestNewHTTPServer_DefaultsToLoopbackAddress(t *testing.T) {
+	t.Parallel()
+
+	server := newHTTPServer(
+		newServer(&trackingAnalyzer{}, fakeCruxQuerier{}),
+		httpServerOptions{
+			ListenAddress: defaultHTTPListenAddress,
+			Port:          defaultHTTPPort,
+			AllowedHosts:  []string{"127.0.0.1"},
+		},
+		nil,
+	)
+	if server.Addr != "127.0.0.1:8080" {
+		t.Errorf("address = %q, want 127.0.0.1:8080", server.Addr)
+	}
+	if server.ReadHeaderTimeout <= 0 || server.IdleTimeout <= 0 {
+		t.Errorf(
+			"timeouts = read header %s, idle %s; both must be positive",
+			server.ReadHeaderTimeout,
+			server.IdleTimeout,
+		)
+	}
+}
+
+func TestHTTPTransport_ShutdownRequiresLoopbackBearerToken(t *testing.T) {
+	t.Parallel()
+
+	shutdownRequested := false
+	handler := buildHTTPHandlerWithShutdown(
+		newServer(&trackingAnalyzer{}, fakeCruxQuerier{}),
+		[]string{"127.0.0.1"},
+		"secret-token",
+		func() { shutdownRequested = true },
+	)
+
+	tests := []struct {
+		name       string
+		remoteAddr string
+		token      string
+		wantStatus int
+		wantStop   bool
+	}{
+		{
+			name:       "remote caller",
+			remoteAddr: "192.0.2.10:1234",
+			token:      "secret-token",
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "wrong token",
+			remoteAddr: "127.0.0.1:1234",
+			token:      "wrong-token",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "authorized loopback caller",
+			remoteAddr: "127.0.0.1:1234",
+			token:      "secret-token",
+			wantStatus: http.StatusAccepted,
+			wantStop:   true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			shutdownRequested = false
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"http://127.0.0.1"+shutdownPath,
+				nil,
+			)
+			request.Host = "127.0.0.1"
+			request.RemoteAddr = test.remoteAddr
+			request.Header.Set("Authorization", "Bearer "+test.token)
+			recorder := httptest.NewRecorder()
+
+			handler.ServeHTTP(recorder, request)
+
+			if recorder.Code != test.wantStatus {
+				t.Errorf("status = %d, want %d", recorder.Code, test.wantStatus)
+			}
+			if shutdownRequested != test.wantStop {
+				t.Errorf("shutdown requested = %v, want %v", shutdownRequested, test.wantStop)
+			}
+		})
+	}
+}
+
 func TestResolveHTTPPort(t *testing.T) {
 	t.Setenv("PORT", "9999")
-	if got := resolveHTTPPort(); got != "9999" {
-		t.Errorf("port = %q, want 9999", got)
+	got, err := resolveHTTPPort(0)
+	if err != nil {
+		t.Fatalf("resolveHTTPPort: %v", err)
+	}
+	if got != 9999 {
+		t.Errorf("port = %d, want 9999", got)
 	}
 
 	t.Setenv("PORT", "")
-	if got := resolveHTTPPort(); got != "8080" {
-		t.Errorf("port = %q, want 8080", got)
+	got, err = resolveHTTPPort(0)
+	if err != nil {
+		t.Fatalf("resolveHTTPPort: %v", err)
+	}
+	if got != defaultHTTPPort {
+		t.Errorf("port = %d, want %d", got, defaultHTTPPort)
+	}
+
+	got, err = resolveHTTPPort(9000)
+	if err != nil {
+		t.Fatalf("resolveHTTPPort flag: %v", err)
+	}
+	if got != 9000 {
+		t.Errorf("flag port = %d, want 9000", got)
+	}
+}
+
+func TestResolveHTTPPort_RejectsInvalidEnvironmentValue(t *testing.T) {
+	t.Setenv("PORT", "invalid")
+	if _, err := resolveHTTPPort(0); err == nil {
+		t.Fatal("resolveHTTPPort returned nil error")
+	}
+}
+
+func TestResolveHTTPListenAddress(t *testing.T) {
+	t.Setenv("MCP_LISTEN_ADDRESS", "192.0.2.10")
+	if got := resolveHTTPListenAddress(""); got != "192.0.2.10" {
+		t.Errorf("address = %q, want 192.0.2.10", got)
+	}
+	if got := resolveHTTPListenAddress("127.0.0.2"); got != "127.0.0.2" {
+		t.Errorf("flag address = %q, want 127.0.0.2", got)
+	}
+}
+
+func TestAllowedHostsMiddleware_NormalizesIPv6(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	handler := allowedHostsMiddleware(
+		http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+			called = true
+			writer.WriteHeader(http.StatusOK)
+		}),
+		[]string{"[::1]"},
+	)
+	request := httptest.NewRequest(http.MethodGet, "http://[::1]/health", nil)
+	request.Host = "[::1]:8080"
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK || !called {
+		t.Errorf("status = %d, called = %v; want 200 and true", recorder.Code, called)
 	}
 }
 

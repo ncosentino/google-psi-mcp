@@ -51,6 +51,9 @@ Download a binary from [GitHub Releases](https://github.com/ncosentino/google-ps
 | Windows x64 | `psi-mcp-go-windows-amd64.exe` | `psi-mcp-csharp-win-x64.exe` |
 | Windows ARM64 | `psi-mcp-go-windows-arm64.exe` | `psi-mcp-csharp-win-arm64.exe` |
 
+Release assets also include `manage-mcp-service.ps1` for running either binary
+as one shared local service.
+
 On Linux or macOS:
 
 ```bash
@@ -80,18 +83,38 @@ The key can instead be passed with `--api-key` or loaded from a
 ## HTTP Transport
 
 ```bash
-PORT=8080 ./psi-mcp-go-linux-amd64 \
+./psi-mcp-go-linux-amd64 \
   --transport http \
+  --listen-address 127.0.0.1 \
+  --port 8080 \
   --allowed-hosts localhost,127.0.0.1
 ```
 
-The C# binary accepts the same `--transport http` flag and `PORT` environment
-variable. C# uses ASP.NET Core's `AllowedHosts` configuration; Go uses
-`--allowed-hosts`.
+The shared MCP endpoint is `http://127.0.0.1:8080/mcp`; service supervisors can
+probe `http://127.0.0.1:8080/health`.
+
+```json
+{
+  "mcpServers": {
+    "pagespeed-insights": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/mcp",
+      "tools": ["*"]
+    }
+  }
+}
+```
+
+Every Copilot or other agent session can use that same process. The C# binary
+accepts the same transport, address, and port options. C# uses ASP.NET Core's
+`AllowedHosts` configuration; Go uses `--allowed-hosts`.
 
 HTTP transport is stateless. It includes host-header and cross-origin defenses,
 but it does **not** add application authentication. Do not expose it publicly
 without an authenticated reverse proxy or private network.
+
+See [Running One Shared Service](docs/shared-service.md) for idempotent
+start/status/stop/update commands and migration from per-session STDIO.
 
 ## MCP Tools
 
