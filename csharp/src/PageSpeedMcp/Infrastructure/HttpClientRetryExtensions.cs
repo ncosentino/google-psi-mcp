@@ -14,7 +14,7 @@ internal static class HttpClientRetryExtensions
         Func<HttpRequestMessage> requestFactory,
         CancellationToken cancellationToken)
     {
-        HttpRequestException? lastException = null;
+        Exception? lastException = null;
         for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
             using var request = requestFactory();
@@ -26,6 +26,13 @@ internal static class HttpClientRetryExtensions
                     .ConfigureAwait(false);
             }
             catch (HttpRequestException ex) when (attempt < MaxAttempts)
+            {
+                lastException = ex;
+                await Task.Delay(BaseDelay * attempt, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+            catch (OperationCanceledException ex)
+                when (!cancellationToken.IsCancellationRequested && attempt < MaxAttempts)
             {
                 lastException = ex;
                 await Task.Delay(BaseDelay * attempt, cancellationToken).ConfigureAwait(false);
