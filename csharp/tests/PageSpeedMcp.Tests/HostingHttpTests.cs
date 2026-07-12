@@ -244,15 +244,65 @@ public sealed class HostingHttpTests
 
     /// <summary>Verifies a browser request from the MCP endpoint's own origin is accepted.</summary>
     [Fact]
-    public void IsAllowedOrigin_AcceptsSameOrigin()
+    public void IsCrossOriginRequestAllowed_AcceptsSameOrigin()
     {
         var context = new DefaultHttpContext();
+        context.Request.Method = HttpMethods.Post;
         context.Request.Scheme = "http";
         context.Request.Host = new HostString("127.0.0.1", 8080);
+        context.Request.Headers.Origin = "http://127.0.0.1:8080";
 
-        Assert.True(Hosting.IsAllowedOrigin(
-            context.Request,
-            "http://127.0.0.1:8080"));
+        Assert.True(Hosting.IsCrossOriginRequestAllowed(context.Request));
+    }
+
+    /// <summary>Verifies fetch metadata blocks cross-site writes without Origin.</summary>
+    [Fact]
+    public async Task BuildHttpHost_RejectsCrossSiteFetchMetadataWithoutOrigin()
+    {
+        await using var app = Hosting.BuildHttpHost([], "test-key", port: 0);
+        await app.StartAsync();
+        try
+        {
+            using var httpClient = new HttpClient();
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                GetEndpoint(app, Hosting.McpPath));
+            request.Headers.Add("Sec-Fetch-Site", "cross-site");
+            request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+
+            using var response = await httpClient.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
+    }
+
+    /// <summary>Verifies safe methods are allowed regardless of fetch metadata.</summary>
+    [Fact]
+    public async Task BuildHttpHost_AllowsSafeCrossSiteMethod()
+    {
+        await using var app = Hosting.BuildHttpHost([], "test-key", port: 0);
+        await app.StartAsync();
+        try
+        {
+            using var httpClient = new HttpClient();
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                GetEndpoint(app, Hosting.McpPath));
+            request.Headers.Add("Sec-Fetch-Site", "cross-site");
+            request.Headers.Add("Origin", "https://evil.example");
+
+            using var response = await httpClient.SendAsync(request);
+
+            Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
     }
 
     /// <summary>Verifies Host filtering rejects a forged hostname before MCP dispatch.</summary>
