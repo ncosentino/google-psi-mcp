@@ -187,7 +187,7 @@ func TestAnalyzePages_BoundsConcurrencyAndPreservesAllResults(t *testing.T) {
 	analyzer := &trackingAnalyzer{}
 	result, _, err := analyzePages(
 		context.Background(),
-		analyzer,
+		newLimitedPageAnalyzer(analyzer, maxConcurrentAnalyses),
 		[]string{
 			"https://example.test/one",
 			"https://example.test/two",

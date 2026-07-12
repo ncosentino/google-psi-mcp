@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using PageSpeedMcp.Infrastructure;
 using PageSpeedMcp.PageSpeed;
 using PageSpeedMcp.Tools;
 using Xunit;
@@ -62,7 +63,10 @@ public sealed class PageSpeedToolBatchTests
             """{"lighthouseResult":{"lighthouseVersion":"13.4.0"}}""",
             TimeSpan.FromMilliseconds(10));
         using var httpClient = new HttpClient(handler);
-        var tool = new PageSpeedTool(new PageSpeedClient(httpClient, "test-key"));
+        using var limiter = new PageSpeedRequestLimiter();
+        var tool = new PageSpeedTool(
+            new PageSpeedClient(httpClient, "test-key"),
+            limiter);
 
         var json = await tool.AnalyzePages(
             [
@@ -89,7 +93,10 @@ public sealed class PageSpeedToolBatchTests
             """{"lighthouseResult":{"lighthouseVersion":"13.4.0"}}""",
             TimeSpan.Zero);
         using var httpClient = new HttpClient(handler);
-        var tool = new PageSpeedTool(new PageSpeedClient(httpClient, "test-key"));
+        using var limiter = new PageSpeedRequestLimiter();
+        var tool = new PageSpeedTool(
+            new PageSpeedClient(httpClient, "test-key"),
+            limiter);
         var urls = Enumerable
             .Range(0, 11)
             .Select(index => $"https://example.test/{index}")
@@ -109,7 +116,10 @@ public sealed class PageSpeedToolBatchTests
             """{"error":{"message":"invalid request"}}""",
             TimeSpan.Zero);
         using var httpClient = new HttpClient(handler);
-        var tool = new PageSpeedTool(new PageSpeedClient(httpClient, "test-key"));
+        using var limiter = new PageSpeedRequestLimiter();
+        var tool = new PageSpeedTool(
+            new PageSpeedClient(httpClient, "test-key"),
+            limiter);
 
         var json = await tool.AnalyzePage(
             "https://example.test",
