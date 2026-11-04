@@ -15,7 +15,7 @@ internal sealed class PageSpeedTool(
     private const int MaxBatchUrls = 10;
 
     [McpServerTool(Name = "analyze_page")]
-    [Description("Analyze a single URL using Google PageSpeed Insights. Separates real-user CrUX field data from synthetic Lighthouse lab data and returns Lighthouse 13 insights with structured details. Agentic browsing is experimental and must be requested explicitly.")]
+    [Description("Analyze a single URL using Google PageSpeed Insights. Separates real-user CrUX field data from synthetic Lighthouse lab data and returns Lighthouse 13 insights with structured details. Each result includes the complete successful Google API JSON in rawResponse. Agentic browsing is experimental and must be requested explicitly.")]
     internal async Task<string> AnalyzePage(
         [Description("The URL to analyze.")] string url,
         [Description("Analysis strategy: mobile, desktop, or both. Defaults to both.")] string strategy = "both",
@@ -33,7 +33,7 @@ internal sealed class PageSpeedTool(
     }
 
     [McpServerTool(Name = "analyze_pages")]
-    [Description("Analyze multiple URLs using Google PageSpeed Insights. Returns separate real-user field data and Lighthouse lab data for every URL and strategy. Agentic browsing is experimental and must be requested explicitly.")]
+    [Description("Analyze multiple URLs using Google PageSpeed Insights. Returns separate real-user field data and Lighthouse lab data for every URL and strategy. Each result includes the complete successful Google API JSON in rawResponse. Agentic browsing is experimental and must be requested explicitly.")]
     internal async Task<string> AnalyzePages(
         [Description("Array of URLs to analyze.")] string[] urls,
         [Description("Analysis strategy: mobile, desktop, or both. Defaults to both.")] string strategy = "both",

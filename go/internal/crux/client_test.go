@@ -1,6 +1,7 @@
 package crux
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -50,6 +51,9 @@ func TestQueryCurrent_SendsValidatedCrUXRequest(t *testing.T) {
 	if result.Target != "https://example.test/page" {
 		t.Errorf("result target = %q, want fixture target", result.Target)
 	}
+	if !bytes.Equal(result.RawResponse, fixture) {
+		t.Error("rawResponse must preserve the complete current CrUX response body")
+	}
 	if requestBody["formFactor"] != "PHONE" {
 		t.Errorf("formFactor = %v, want PHONE", requestBody["formFactor"])
 	}
@@ -89,8 +93,12 @@ func TestQueryHistory_SendsCollectionPeriodCount(t *testing.T) {
 		t.Fatalf("NewQueryRequest: %v", err)
 	}
 
-	if _, err := client.QueryHistory(context.Background(), request); err != nil {
+	result, err := client.QueryHistory(context.Background(), request)
+	if err != nil {
 		t.Fatalf("QueryHistory: %v", err)
+	}
+	if !bytes.Equal(result.RawResponse, fixture) {
+		t.Error("rawResponse must preserve the complete CrUX history response body")
 	}
 	if requestBody["collectionPeriodCount"] != float64(3) {
 		t.Errorf("collectionPeriodCount = %v, want 3", requestBody["collectionPeriodCount"])

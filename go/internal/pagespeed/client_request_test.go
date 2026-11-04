@@ -1,6 +1,7 @@
 package pagespeed
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -12,11 +13,12 @@ import (
 func TestAnalyze_DefaultCategories_AreSentToPSI(t *testing.T) {
 	t.Parallel()
 
+	fixture := readPSIFixture(t)
 	query := make(chan url.Values, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		query <- r.URL.Query()
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"lighthouseResult":{"lighthouseVersion":"13.4.0"}}`))
+		_, _ = w.Write(fixture)
 	}))
 	defer server.Close()
 
@@ -30,8 +32,12 @@ func TestAnalyze_DefaultCategories_AreSentToPSI(t *testing.T) {
 		t.Fatalf("NewAnalysisRequest: %v", err)
 	}
 
-	if _, err := client.Analyze(context.Background(), request); err != nil {
+	result, err := client.Analyze(context.Background(), request)
+	if err != nil {
 		t.Fatalf("Analyze: %v", err)
+	}
+	if !bytes.Equal(result.RawResponse, fixture) {
+		t.Error("rawResponse must preserve the complete Google response body")
 	}
 
 	got := <-query

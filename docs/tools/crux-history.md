@@ -17,7 +17,10 @@ The allowed range is 1 through 40. Each data point is a 28-day rolling
 aggregation, and adjacent weekly periods overlap.
 
 CrUX may represent an unavailable historical value as `"NaN"` or `null`.
-The server normalizes both to JSON `null`.
+The server normalizes both to JSON `null` in its metric summaries.
+The included `rawResponse` preserves the complete successful Google API JSON
+response, including the original `"NaN"` strings, nulls, numeric strings, and
+unknown fields. It is not filtered or truncated and requires no additional call.
 
 ```text
 Show the last 40 phone collection periods for the devleader.ca origin. Explain

@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strconv"
 	"sync"
 	"testing"
@@ -92,6 +96,119 @@ func TestHTTPTransport_ServesRealSession(t *testing.T) {
 	}
 	if result.IsError {
 		t.Errorf("CallTool returned error content: %+v", result.Content)
+	}
+}
+
+func TestHTTPTransport_PreservesCompleteGoogleResponses(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		tool      string
+		fixture   string
+		arguments map[string]any
+	}{
+		{
+			tool: "analyze_page", fixture: "psi-lighthouse-13.4.json",
+			arguments: map[string]any{"url": "https://example.test", "strategy": "both"},
+		},
+		{
+			tool: "analyze_pages", fixture: "psi-lighthouse-13.4.json",
+			arguments: map[string]any{
+				"urls":     []string{"https://example.test/one", "https://example.test/two"},
+				"strategy": "both",
+			},
+		},
+		{
+			tool: "get_crux_data", fixture: "crux-current.json",
+			arguments: map[string]any{"target": "https://example.test/page"},
+		},
+		{
+			tool: "get_crux_history", fixture: "crux-history.json",
+			arguments: map[string]any{"target": "https://example.test", "target_type": "origin"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.tool, func(t *testing.T) {
+			t.Parallel()
+
+			fixture, err := os.ReadFile(filepath.Join("..", "testdata", test.fixture))
+			if err != nil {
+				t.Fatalf("read fixture: %v", err)
+			}
+			srv := newServer(
+				&trackingAnalyzer{rawResponse: fixture},
+				fakeCruxQuerier{rawResponse: fixture},
+			)
+			httpServer := httptest.NewServer(buildHTTPHandler(srv, []string{"127.0.0.1"}))
+			defer httpServer.Close()
+
+			ctx := context.Background()
+			client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "test"}, nil)
+			session, err := client.Connect(
+				ctx,
+				&mcp.StreamableClientTransport{Endpoint: httpServer.URL + mcpPath},
+				nil,
+			)
+			if err != nil {
+				t.Fatalf("Connect: %v", err)
+			}
+			defer session.Close()
+
+			result, err := session.CallTool(ctx, &mcp.CallToolParams{
+				Name: test.tool, Arguments: test.arguments,
+			})
+			if err != nil {
+				t.Fatalf("CallTool: %v", err)
+			}
+			if result.IsError || len(result.Content) != 1 {
+				t.Fatalf("unexpected tool result: %+v", result)
+			}
+			text, ok := result.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("content type = %T, want *mcp.TextContent", result.Content[0])
+			}
+			var response struct {
+				RawResponse json.RawMessage `json:"rawResponse"`
+				Results     []struct {
+					RawResponse json.RawMessage `json:"rawResponse"`
+				} `json:"results"`
+			}
+			if err := json.Unmarshal([]byte(text.Text), &response); err != nil {
+				t.Fatalf("decode tool response: %v", err)
+			}
+			if test.tool == "analyze_page" || test.tool == "analyze_pages" {
+				wantCount := 2
+				if test.tool == "analyze_pages" {
+					wantCount = 4
+				}
+				if len(response.Results) != wantCount {
+					t.Fatalf("results = %d, want %d", len(response.Results), wantCount)
+				}
+				for _, analysis := range response.Results {
+					assertFullJSONResponse(t, fixture, analysis.RawResponse)
+				}
+			} else {
+				assertFullJSONResponse(t, fixture, response.RawResponse)
+			}
+		})
+	}
+}
+
+func assertFullJSONResponse(t *testing.T, expected, actual []byte) {
+	t.Helper()
+
+	decode := func(data []byte) any {
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		decoder.UseNumber()
+		var value any
+		if err := decoder.Decode(&value); err != nil {
+			t.Fatalf("decode full response: %v", err)
+		}
+		return value
+	}
+	if !reflect.DeepEqual(decode(expected), decode(actual)) {
+		t.Error("rawResponse must preserve every upstream field, value, and JSON type")
 	}
 }
 

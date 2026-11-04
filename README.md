@@ -24,6 +24,7 @@ Pre-built binaries require no Go, .NET, Node.js, or Python runtime.
 - Up to 40 weekly CrUX History API collection periods
 - STDIO and stateless Streamable HTTP MCP transports
 - Matching Go and C# Native AOT implementations
+- Complete successful Google API JSON in `rawResponse`, alongside normalized results
 
 ## Google API Setup
 
@@ -215,6 +216,24 @@ URL does not discard successful analyses.
         "notApplicableAuditIds": [],
         "manualAuditIds": [],
         "entities": []
+      },
+      "rawResponse": {
+        "id": "https://example.com/",
+        "lighthouseResult": {
+          "lighthouseVersion": "13.4.0",
+          "audits": {
+            "lcp-breakdown-insight": {
+              "id": "lcp-breakdown-insight",
+              "score": 1,
+              "details": {
+                "type": "table",
+                "items": [
+                  { "subpart": "timeToFirstByte", "duration": 120 }
+                ]
+              }
+            }
+          }
+        }
       }
     }
   ],
@@ -225,6 +244,25 @@ URL does not discard successful analyses.
 Field ratings come from Google's CrUX categories. Lab metrics retain Lighthouse
 scores and units; the server does not mislabel synthetic metrics as real-user
 Core Web Vitals.
+
+Every successful result from all four tools also includes `rawResponse`: the
+complete Google API JSON response for that request, without filtering or
+truncation. The normalized fields remain unchanged for existing callers.
+For PSI, inspect `rawResponse.lighthouseResult.audits` for every returned audit,
+including passed, manual, and not-applicable audits and their details.
+Configuration, environment, timings, screenshot data, and unknown future fields
+are preserved when Google supplies them. The example above shows only a subset
+of a report.
+
+Raw responses preserve JSON types, numeric precision, numeric strings, and nulls;
+JSON whitespace, escaping, and object order may change. In particular, CrUX
+`"NaN"` remains a string in `rawResponse` even though normalized history uses
+`null`. No additional API calls are made. Request controls, batch ordering,
+partial failures, and HTTP error handling are unchanged. This exposes Google's
+returned JSON, not separate trace artifacts that the API does not include.
+
+Full reports can be large and contain page URLs, DOM snippets, and screenshot
+data. Handle them accordingly; MCP clients may impose their own output limits.
 
 ### `get_crux_data`
 
@@ -278,6 +316,9 @@ Built by **[Nick Cosentino](https://www.devleader.ca)** (Dev Leader).
 1. Open an issue before submitting a feature.
 2. Keep Go and C# behavior in parity.
 3. Run Go lint/tests, C# build/tests, and the strict documentation build.
+4. Preserve complete upstream JSON in `rawResponse` when changing response
+   mappings. Normalized summaries are additional projections, not replacements
+   for Google's payload. Keep fixture-to-MCP fidelity coverage in both languages.
 
 ## License
 

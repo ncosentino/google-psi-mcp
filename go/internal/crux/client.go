@@ -125,26 +125,30 @@ func NewQueryRequest(
 // QueryCurrent returns current 28-day Chrome UX Report data.
 func (c *Client) QueryCurrent(ctx context.Context, request QueryRequest) (*Result, error) {
 	var raw rawResponse
-	if err := c.post(ctx, c.currentAPIURL, request, false, &raw); err != nil {
+	body, err := c.post(ctx, c.currentAPIURL, request, false, &raw)
+	if err != nil {
 		return nil, err
 	}
 	result := parseCurrent(&raw)
 	if result == nil {
 		return nil, fmt.Errorf("CrUX API response did not contain a record")
 	}
+	result.RawResponse = body
 	return result, nil
 }
 
 // QueryHistory returns Chrome UX Report timeseries data.
 func (c *Client) QueryHistory(ctx context.Context, request QueryRequest) (*HistoryResult, error) {
 	var raw rawHistoryResponse
-	if err := c.post(ctx, c.historyAPIURL, request, true, &raw); err != nil {
+	body, err := c.post(ctx, c.historyAPIURL, request, true, &raw)
+	if err != nil {
 		return nil, err
 	}
 	result := parseHistory(&raw)
 	if result == nil {
 		return nil, fmt.Errorf("CrUX History API response did not contain a record")
 	}
+	result.RawResponse = body
 	return result, nil
 }
 
@@ -154,7 +158,7 @@ func (c *Client) post(
 	request QueryRequest,
 	includeHistoryCount bool,
 	output any,
-) error {
+) (json.RawMessage, error) {
 	body := make(map[string]any, 4)
 	body[request.TargetType] = request.Target
 	if request.FormFactor != "all" {
@@ -173,12 +177,12 @@ func (c *Client) post(
 
 	encodedBody, err := json.Marshal(body)
 	if err != nil {
-		return fmt.Errorf("encoding CrUX request: %w", err)
+		return nil, fmt.Errorf("encoding CrUX request: %w", err)
 	}
 
 	endpointURL, err := url.Parse(endpoint)
 	if err != nil {
-		return fmt.Errorf("parsing CrUX endpoint: %w", err)
+		return nil, fmt.Errorf("parsing CrUX endpoint: %w", err)
 	}
 	query := endpointURL.Query()
 	query.Set("key", c.apiKey)
@@ -198,19 +202,19 @@ func (c *Client) post(
 		return httpRequest, nil
 	})
 	if err != nil {
-		return fmt.Errorf("executing CrUX request: %w", err)
+		return nil, fmt.Errorf("executing CrUX request: %w", err)
 	}
 	if response.StatusCode != http.StatusOK {
-		return &apihttp.StatusError{
+		return nil, &apihttp.StatusError{
 			Service:     "CrUX API",
 			StatusCode:  response.StatusCode,
 			BodySnippet: truncate(string(response.Body), 500),
 		}
 	}
 	if err := json.Unmarshal(response.Body, output); err != nil {
-		return fmt.Errorf("parsing CrUX response: %w", err)
+		return nil, fmt.Errorf("parsing CrUX response: %w", err)
 	}
-	return nil
+	return json.RawMessage(response.Body), nil
 }
 
 func truncate(value string, maxLength int) string {

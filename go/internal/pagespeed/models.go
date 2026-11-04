@@ -18,6 +18,8 @@ type AnalysisResult struct {
 	FieldData *FieldData `json:"fieldData,omitempty"`
 	// LabData contains the synthetic Lighthouse result when it is available.
 	LabData *LabData `json:"labData,omitempty"`
+	// RawResponse preserves the complete successful Google API JSON response.
+	RawResponse json.RawMessage `json:"rawResponse,omitempty"`
 }
 
 // AnalysisMetadata describes the source and timing of a PageSpeed Insights result.

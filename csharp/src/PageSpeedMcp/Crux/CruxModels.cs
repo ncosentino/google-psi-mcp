@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace PageSpeedMcp.Crux;
@@ -9,7 +10,8 @@ internal sealed record CruxResult(
     string? FormFactor,
     CruxCollectionPeriod CollectionPeriod,
     IReadOnlyDictionary<string, CruxMetric> Metrics,
-    CruxUrlNormalization? UrlNormalization);
+    CruxUrlNormalization? UrlNormalization,
+    JsonElement? RawResponse = null);
 
 /// <summary>Historical Chrome UX Report timeseries data.</summary>
 internal sealed record CruxHistoryResult(
@@ -17,7 +19,8 @@ internal sealed record CruxHistoryResult(
     string TargetType,
     string? FormFactor,
     IReadOnlyList<CruxCollectionPeriod> CollectionPeriods,
-    IReadOnlyDictionary<string, CruxHistoryMetric> Metrics);
+    IReadOnlyDictionary<string, CruxHistoryMetric> Metrics,
+    JsonElement? RawResponse = null);
 
 /// <summary>One CrUX aggregation window.</summary>
 internal sealed record CruxCollectionPeriod(CruxDate FirstDate, CruxDate LastDate);
