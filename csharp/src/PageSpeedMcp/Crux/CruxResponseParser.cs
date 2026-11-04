@@ -59,7 +59,8 @@ internal static class CruxResponseParser
             formFactor,
             ParseCollectionPeriod(record.GetProperty("collectionPeriod")),
             metrics,
-            normalization);
+            normalization,
+            RawResponse: root.Clone());
     }
 
     /// <summary>Parses a historical CrUX response.</summary>
@@ -112,7 +113,8 @@ internal static class CruxResponseParser
             metrics[metricProperty.Name] = new CruxHistoryMetric(histogram, p75, fractions);
         }
 
-        return new CruxHistoryResult(target, targetType, formFactor, periods, metrics);
+        return new CruxHistoryResult(
+            target, targetType, formFactor, periods, metrics, RawResponse: root.Clone());
     }
 
     private static (string Target, string TargetType, string? FormFactor) ParseKey(

@@ -17,32 +17,37 @@ import (
 )
 
 type trackingAnalyzer struct {
-	active    atomic.Int32
-	maxActive atomic.Int32
-	calls     atomic.Int32
+	active      atomic.Int32
+	maxActive   atomic.Int32
+	calls       atomic.Int32
+	rawResponse json.RawMessage
 }
 
-type fakeCruxQuerier struct{}
+type fakeCruxQuerier struct {
+	rawResponse json.RawMessage
+}
 
-func (fakeCruxQuerier) QueryCurrent(
+func (querier fakeCruxQuerier) QueryCurrent(
 	_ context.Context,
 	request crux.QueryRequest,
 ) (*crux.Result, error) {
 	return &crux.Result{
-		Target:     request.Target,
-		TargetType: request.TargetType,
-		Metrics:    map[string]crux.Metric{},
+		Target:      request.Target,
+		TargetType:  request.TargetType,
+		Metrics:     map[string]crux.Metric{},
+		RawResponse: querier.rawResponse,
 	}, nil
 }
 
-func (fakeCruxQuerier) QueryHistory(
+func (querier fakeCruxQuerier) QueryHistory(
 	_ context.Context,
 	request crux.QueryRequest,
 ) (*crux.HistoryResult, error) {
 	return &crux.HistoryResult{
-		Target:     request.Target,
-		TargetType: request.TargetType,
-		Metrics:    map[string]crux.HistoryMetric{},
+		Target:      request.Target,
+		TargetType:  request.TargetType,
+		Metrics:     map[string]crux.HistoryMetric{},
+		RawResponse: querier.rawResponse,
 	}, nil
 }
 
@@ -61,6 +66,7 @@ func (a *trackingAnalyzer) Analyze(
 	defer a.active.Add(-1)
 	time.Sleep(10 * time.Millisecond)
 	return &pagespeed.AnalysisResult{
+		RawResponse: a.rawResponse,
 		Metadata: pagespeed.AnalysisMetadata{
 			InputURL: request.URL,
 			Strategy: request.Strategy,

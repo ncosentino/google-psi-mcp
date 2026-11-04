@@ -7,7 +7,8 @@ namespace PageSpeedMcp.PageSpeed;
 internal sealed record PageSpeedAnalysis(
     AnalysisMetadata Metadata,
     FieldData? FieldData,
-    LabData? LabData);
+    LabData? LabData,
+    JsonElement? RawResponse = null);
 
 /// <summary>Results and per-request failures from an MCP analysis call.</summary>
 internal sealed record AnalysisResponse(
@@ -287,6 +288,7 @@ internal sealed class AuditRaw
 
 /// <summary>System.Text.Json source generation context for AOT-safe serialization.</summary>
 [JsonSerializable(typeof(PsiApiResponse))]
+[JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(AnalysisResponse))]
 [JsonSerializable(typeof(PageSpeedAnalysis))]
 [JsonSourceGenerationOptions(

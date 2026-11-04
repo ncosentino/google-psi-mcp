@@ -10,7 +10,7 @@ namespace PageSpeedMcp.Tools;
 internal sealed class CruxTool(CruxClient client)
 {
     [McpServerTool(Name = "get_crux_data")]
-    [Description("Get current Chrome UX Report real-user data for a URL or origin. Supports all current CrUX metrics, including Core Web Vitals, LCP subparts, navigation types, RTT, resource types, and form-factor fractions. Requires the Chrome UX Report API to be enabled and allowed for the configured API key.")]
+    [Description("Get current Chrome UX Report real-user data for a URL or origin. Supports all current CrUX metrics, including Core Web Vitals, LCP subparts, navigation types, RTT, resource types, and form-factor fractions. Includes the complete successful Google API JSON in rawResponse. Requires the Chrome UX Report API to be enabled and allowed for the configured API key.")]
     internal async Task<string> GetCruxData(
         [Description("Absolute URL or origin to query.")] string target,
         [Description("Whether target is a url or origin. Defaults to url.")] string target_type = "url",
@@ -29,7 +29,7 @@ internal sealed class CruxTool(CruxClient client)
     }
 
     [McpServerTool(Name = "get_crux_history")]
-    [Description("Get up to 40 weekly Chrome UX Report collection periods for a URL or origin. Returns real-user metric timeseries with null values for unavailable periods. Requires the Chrome UX Report API to be enabled and allowed for the configured API key.")]
+    [Description("Get up to 40 weekly Chrome UX Report collection periods for a URL or origin. Returns real-user metric timeseries with null values for unavailable periods. Includes the complete successful Google API JSON in rawResponse, preserving original unavailable values. Requires the Chrome UX Report API to be enabled and allowed for the configured API key.")]
     internal async Task<string> GetCruxHistory(
         [Description("Absolute URL or origin to query.")] string target,
         [Description("Whether target is a url or origin. Defaults to url.")] string target_type = "url",

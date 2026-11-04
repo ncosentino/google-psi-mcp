@@ -1,5 +1,10 @@
 {
+  "futureData": {
+    "sequence": 9007199254740993,
+    "values": [null, true, "0.08", { "label": "Synthetic <data>" }]
+  },
   "record": {
+    "futureRecordData": { "available": true },
     "key": {
       "url": "https://example.test/page",
       "formFactor": "PHONE"

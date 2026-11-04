@@ -38,6 +38,9 @@ successful analyses:
 ```
 
 See [`analyze_page`](analyze-page.md) for the successful result structure.
+Each successful URL/strategy result includes its own complete `rawResponse`;
+batching does not combine, filter, or truncate upstream payloads. Large reports
+therefore increase the size of the batch response.
 
 ## Example
 

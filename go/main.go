@@ -150,7 +150,7 @@ func newServer(client pageAnalyzer, cruxClient cruxQuerier) *mcp.Server {
 	mcp.AddTool(srv,
 		&mcp.Tool{
 			Name:        "analyze_page",
-			Description: "Analyze a single URL using Google PageSpeed Insights. Separates real-user CrUX field data from synthetic Lighthouse lab data and returns Lighthouse 13 insights with structured details. strategy defaults to both. categories defaults to performance, SEO, accessibility, and best-practices; agentic-browsing is experimental and must be requested explicitly.",
+			Description: "Analyze a single URL using Google PageSpeed Insights. Separates real-user CrUX field data from synthetic Lighthouse lab data and returns Lighthouse 13 insights with structured details. Each result includes the complete successful Google API JSON in rawResponse. strategy defaults to both. categories defaults to performance, SEO, accessibility, and best-practices; agentic-browsing is experimental and must be requested explicitly.",
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input analyzePageInput) (*mcp.CallToolResult, any, error) {
 			return analyzePages(ctx, client, []string{input.URL}, input.Strategy, input.Categories, input.Locale)
@@ -160,7 +160,7 @@ func newServer(client pageAnalyzer, cruxClient cruxQuerier) *mcp.Server {
 	mcp.AddTool(srv,
 		&mcp.Tool{
 			Name:        "get_crux_data",
-			Description: "Get current Chrome UX Report real-user data for a URL or origin. Supports all current CrUX metrics, including Core Web Vitals, LCP subparts, navigation types, RTT, resource types, and form-factor fractions. Requires the Chrome UX Report API to be enabled and allowed for the configured API key.",
+			Description: "Get current Chrome UX Report real-user data for a URL or origin. Supports all current CrUX metrics, including Core Web Vitals, LCP subparts, navigation types, RTT, resource types, and form-factor fractions. Includes the complete successful Google API JSON in rawResponse. Requires the Chrome UX Report API to be enabled and allowed for the configured API key.",
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input cruxDataInput) (*mcp.CallToolResult, any, error) {
 			request, err := crux.NewQueryRequest(
@@ -184,7 +184,7 @@ func newServer(client pageAnalyzer, cruxClient cruxQuerier) *mcp.Server {
 	mcp.AddTool(srv,
 		&mcp.Tool{
 			Name:        "get_crux_history",
-			Description: "Get up to 40 weekly Chrome UX Report collection periods for a URL or origin. Returns real-user metric timeseries with null values for unavailable periods. Requires the Chrome UX Report API to be enabled and allowed for the configured API key.",
+			Description: "Get up to 40 weekly Chrome UX Report collection periods for a URL or origin. Returns real-user metric timeseries with null values for unavailable periods. Includes the complete successful Google API JSON in rawResponse, preserving original unavailable values. Requires the Chrome UX Report API to be enabled and allowed for the configured API key.",
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input cruxHistoryInput) (*mcp.CallToolResult, any, error) {
 			request, err := crux.NewQueryRequest(
@@ -208,7 +208,7 @@ func newServer(client pageAnalyzer, cruxClient cruxQuerier) *mcp.Server {
 	mcp.AddTool(srv,
 		&mcp.Tool{
 			Name:        "analyze_pages",
-			Description: "Analyze multiple URLs using Google PageSpeed Insights. Returns separate real-user field data and Lighthouse lab data for every URL and strategy. strategy defaults to both. categories defaults to performance, SEO, accessibility, and best-practices; agentic-browsing is experimental and must be requested explicitly.",
+			Description: "Analyze multiple URLs using Google PageSpeed Insights. Returns separate real-user field data and Lighthouse lab data for every URL and strategy. Each result includes the complete successful Google API JSON in rawResponse. strategy defaults to both. categories defaults to performance, SEO, accessibility, and best-practices; agentic-browsing is experimental and must be requested explicitly.",
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input analyzePagesInput) (*mcp.CallToolResult, any, error) {
 			return analyzePages(ctx, client, input.URLs, input.Strategy, input.Categories, input.Locale)

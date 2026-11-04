@@ -1,5 +1,10 @@
 {
+  "futureData": {
+    "sequence": 9007199254740993,
+    "values": [null, true, "NaN", { "label": "Synthetic <data>" }]
+  },
   "record": {
+    "futureRecordData": { "available": true },
     "key": {
       "origin": "https://example.test",
       "formFactor": "DESKTOP"

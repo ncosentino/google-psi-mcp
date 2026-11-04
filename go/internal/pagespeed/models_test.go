@@ -123,17 +123,24 @@ func TestNewClientNotNil(t *testing.T) {
 func loadPSIFixture(t *testing.T) *apiResponse {
 	t.Helper()
 
+	data := readPSIFixture(t)
+	var raw apiResponse
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal PSI fixture: %v", err)
+	}
+	return &raw
+}
+
+func readPSIFixture(t *testing.T) []byte {
+	t.Helper()
+
 	path := filepath.Join("..", "..", "..", "testdata", "psi-lighthouse-13.4.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read PSI fixture: %v", err)
 	}
 
-	var raw apiResponse
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("unmarshal PSI fixture: %v", err)
-	}
-	return &raw
+	return data
 }
 
 func findAudit(t *testing.T, audits []LighthouseAudit, id string) LighthouseAudit {

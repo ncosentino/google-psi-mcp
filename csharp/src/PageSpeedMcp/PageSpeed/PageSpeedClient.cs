@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using PageSpeedMcp.Infrastructure;
 
 namespace PageSpeedMcp.PageSpeed;
@@ -34,11 +35,15 @@ internal sealed class PageSpeedClient(HttpClient httpClient, string apiKey)
                 response.StatusCode);
         }
 
-        var raw = await response.Content
-            .ReadFromJsonAsync(PsiJsonContext.Default.PsiApiResponse, cancellationToken)
+        var rawResponse = await response.Content
+            .ReadFromJsonAsync(PsiJsonContext.Default.JsonElement, cancellationToken)
             .ConfigureAwait(false);
 
-        return PageSpeedResultParser.Parse(request.Url, request.Strategy, raw);
+        var raw = rawResponse.Deserialize(PsiJsonContext.Default.PsiApiResponse);
+        return PageSpeedResultParser.Parse(request.Url, request.Strategy, raw) with
+        {
+            RawResponse = rawResponse,
+        };
     }
 
     private string BuildRequestUrl(PageSpeedAnalysisRequest request)

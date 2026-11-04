@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 using PageSpeedMcp.Infrastructure;
 using Xunit;
 
@@ -98,6 +99,69 @@ public sealed class HostingHttpTests
                 });
 
             Assert.NotEqual(true, result.IsError);
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
+    }
+
+    /// <summary>Verifies complete Google JSON survives parsing, source-generated serialization, and MCP dispatch.</summary>
+    [Theory]
+    [InlineData("analyze_page", "psi-lighthouse-13.4.json")]
+    [InlineData("analyze_pages", "psi-lighthouse-13.4.json")]
+    [InlineData("get_crux_data", "crux-current.json")]
+    [InlineData("get_crux_history", "crux-history.json")]
+    public async Task BuildHttpHost_PreservesCompleteGoogleResponse(string tool, string fixture)
+    {
+        var json = ReadFixture(fixture);
+        var handler = new ResponseHandler(json);
+        var isAnalysis = tool is "analyze_page" or "analyze_pages";
+        await using var app = Hosting.BuildHttpHost(
+            [],
+            "test-key",
+            port: 0,
+            pageSpeedHandler: isAnalysis ? handler : null,
+            cruxHandler: isAnalysis ? null : handler);
+        await app.StartAsync();
+        try
+        {
+            await using var client = await ConnectAsync(app);
+            Dictionary<string, object?> arguments = tool switch
+            {
+                "analyze_page" => new()
+                {
+                    ["url"] = "https://example.test",
+                    ["strategy"] = "both",
+                },
+                "analyze_pages" => new()
+                {
+                    ["urls"] = new[] { "https://example.test/one", "https://example.test/two" },
+                    ["strategy"] = "both",
+                },
+                _ => new()
+                {
+                    ["target"] = "https://example.test",
+                },
+            };
+            var result = await client.CallToolAsync(tool, arguments);
+
+            Assert.NotEqual(true, result.IsError);
+            var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content));
+            using var response = JsonDocument.Parse(text.Text);
+            using var expected = JsonDocument.Parse(json);
+            JsonElement[] entries = isAnalysis
+                ? response.RootElement.GetProperty("results").EnumerateArray().ToArray()
+                : [response.RootElement];
+            Assert.Equal(tool == "analyze_pages" ? 4 : isAnalysis ? 2 : 1, entries.Length);
+            foreach (var entry in entries)
+            {
+                var rawResponse = entry.GetProperty("rawResponse");
+                Assert.True(JsonElement.DeepEquals(expected.RootElement, rawResponse));
+                Assert.Equal(
+                    9007199254740993L,
+                    rawResponse.GetProperty("futureData").GetProperty("sequence").GetInt64());
+            }
         }
         finally
         {

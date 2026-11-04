@@ -85,7 +85,7 @@ jobs:
         run: python scripts/generate-articles.py docs/articles.md
 
       - name: Build documentation
-        run: python -m mkdocs build
+        run: python -m mkdocs build --strict
 
       - name: Deploy documentation (Cloudflare Pages)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'

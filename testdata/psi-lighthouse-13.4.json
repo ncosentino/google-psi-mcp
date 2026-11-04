@@ -1,6 +1,10 @@
 {
   "id": "https://example.test/final",
   "analysisUTCTimestamp": "2026-07-11T22:59:28Z",
+  "futureData": {
+    "sequence": 9007199254740993,
+    "values": [null, true, "0.08", { "label": "Synthetic <data>" }]
+  },
   "loadingExperience": {
     "id": "https://example.test/page",
     "initial_url": "https://example.test/page",
@@ -100,6 +104,17 @@
       "The page loaded more slowly than expected."
     ],
     "runtimeError": null,
+    "configSettings": {
+      "formFactor": "mobile",
+      "throttlingMethod": "simulate"
+    },
+    "environment": {
+      "hostUserAgent": "Synthetic Lighthouse agent"
+    },
+    "timing": { "total": 1234.5 },
+    "fullPageScreenshot": {
+      "screenshot": { "data": "data:image/png;base64,AA==" }
+    },
     "categories": {
       "performance": {
         "id": "performance",
@@ -207,6 +222,38 @@
           ],
           "items": [
             { "url": "https://example.test/styles.css", "wastedMs": 710 }
+          ]
+        }
+      },
+      "lcp-breakdown-insight": {
+        "id": "lcp-breakdown-insight",
+        "title": "LCP breakdown",
+        "score": 1,
+        "scoreDisplayMode": "informative",
+        "details": {
+          "type": "table",
+          "items": [
+            { "subpart": "timeToFirstByte", "duration": 120 },
+            { "subpart": "resourceLoadDelay", "duration": 600 },
+            { "subpart": "resourceLoadDuration", "duration": 1300 },
+            { "subpart": "elementRenderDelay", "duration": 1080 }
+          ]
+        }
+      },
+      "network-requests": {
+        "id": "network-requests",
+        "title": "Network requests",
+        "score": 1,
+        "scoreDisplayMode": "informative",
+        "details": {
+          "type": "table",
+          "items": [
+            {
+              "url": "https://example.test/hero.webp",
+              "networkRequestTime": 720,
+              "networkEndTime": 2020,
+              "transferSize": 19254
+            }
           ]
         }
       },

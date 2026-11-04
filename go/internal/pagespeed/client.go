@@ -125,7 +125,9 @@ func (c *Client) Analyze(ctx context.Context, analysisRequest AnalysisRequest) (
 		return nil, fmt.Errorf("parsing PSI response: %w", err)
 	}
 
-	return parseResult(analysisRequest.URL, analysisRequest.Strategy, &raw), nil
+	result := parseResult(analysisRequest.URL, analysisRequest.Strategy, &raw)
+	result.RawResponse = json.RawMessage(response.Body)
+	return result, nil
 }
 
 func (c *Client) buildRequest(

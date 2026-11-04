@@ -22,6 +22,8 @@ type Result struct {
 	Metrics map[string]Metric `json:"metrics"`
 	// URLNormalization describes URL normalization performed by CrUX.
 	URLNormalization *URLNormalization `json:"urlNormalization,omitempty"`
+	// RawResponse preserves the complete successful Google API JSON response.
+	RawResponse json.RawMessage `json:"rawResponse,omitempty"`
 }
 
 // HistoryResult contains historical Chrome UX Report timeseries data.
@@ -36,6 +38,8 @@ type HistoryResult struct {
 	CollectionPeriods []CollectionPeriod `json:"collectionPeriods"`
 	// Metrics contains every metric timeseries returned by CrUX.
 	Metrics map[string]HistoryMetric `json:"metrics"`
+	// RawResponse preserves the complete successful Google API JSON response.
+	RawResponse json.RawMessage `json:"rawResponse,omitempty"`
 }
 
 // CollectionPeriod identifies one CrUX aggregation window.
