@@ -84,6 +84,9 @@ jobs:
       - name: Generate articles page
         run: python scripts/generate-articles.py docs/articles.md
 
+      - name: Verify source-derived documentation descriptions
+        run: python scripts/test-docs-metadata.py
+
       - name: Build documentation
         run: python -m mkdocs build --strict
 
