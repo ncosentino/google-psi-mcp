@@ -55,6 +55,7 @@ plugins:
   - meta
 
 hooks:
+  - docs/hooks/metadata.py
   - docs/hooks/schema.py
   - docs/hooks/llms_txt.py
 
