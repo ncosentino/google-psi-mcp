@@ -90,6 +90,9 @@ jobs:
       - name: Build documentation
         run: python -m mkdocs build --strict
 
+      - name: Verify documentation page schema
+        run: python scripts/test-docs-schema.py
+
       - name: Deploy documentation (Cloudflare Pages)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: cloudflare/wrangler-action@v4

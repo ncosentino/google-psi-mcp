@@ -2,6 +2,31 @@
 
 import json
 import re
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
+
+
+def on_page_markdown(markdown, page, config, files):
+    if page.canonical_url:
+        url = urlsplit(config.site_url)
+        path = url.path if page.is_homepage else url.path.rstrip('/') + '/' + page.url
+        path = '/'.join(quote(unquote(part), safe='') for part in path.split('/'))
+        page.canonical_url = urlunsplit(url._replace(path=path.rstrip('/')))
+    return markdown
+
+
+def on_page_context(context, page, config, nav):
+    title = page.meta.get('title') or page.title
+    title = config.site_name if page.is_homepage else f'{title} - {config.site_name}'
+    context['documentation_title'] = title
+    context['documentation_schema'] = _schema_script({
+        '@context': 'https://schema.org',
+        '@type': 'WebPage',
+        '@id': page.canonical_url,
+        'url': page.canonical_url,
+        'name': title,
+        'description': page.meta['description'],
+    })
+    return context
 
 
 def _extract_h2_sections(html: str) -> list[tuple[str, str]]:
