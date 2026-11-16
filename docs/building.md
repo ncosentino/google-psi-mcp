@@ -59,6 +59,12 @@ Both commands expose MCP at `/mcp` and health metadata at `/health`.
 
 ## Documentation-site descriptions
 
+The existing schema hook emits a page-specific `WebPage` from this same description.
+Its name matches the HTML and social title, and its identity matches the slashless,
+URI-escaped canonical URL. Existing project and instructional schemas remain.
+The documentation CI job checks built metadata and punctuation/script escaping with
+`python scripts/test-docs-schema.py` after the MkDocs build.
+
 MkDocs derives descriptions from each page's title and introductory prose, excluding
 notes, navigation, images, code blocks and tables. Missing prose receives a truthful
 site/page identity fallback; the homepage retains its project description.
